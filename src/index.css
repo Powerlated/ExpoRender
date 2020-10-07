@@ -11,3 +11,17 @@ canvas {
 
   image-rendering: pixelated;
 }
+
+#container {
+  display: flex;
+  flex-direction: row;
+}
+
+#container > * {
+  margin-right: 12px;
+}
+
+#debug {
+  font-family: monospace;
+  font-size: 24px;
+}
