@@ -64,6 +64,7 @@ function debug(msg: any) {
 class Triangle {
     verticesX = new Uint32Array(3);
     verticesY = new Uint32Array(3);
+    verticesZ = new Uint32Array(3);
 
     colors = new Uint32Array(3);
 
@@ -113,8 +114,8 @@ let clearColor = Uint8Array.of(0xDD, 0xDD, 0xDD, 0xFF);
 
 let pixelsFilled = 0;
 
-let verticesXBuf = new Uint32Array(3);
-let verticesYBuf = new Uint32Array(3);
+let verticesXBuf = new Float64Array(3);
+let verticesYBuf = new Float64Array(3);
 
 function renderScene() {
     for (let t = 0; t < tris.length; t++) {
@@ -227,27 +228,28 @@ function renderScene() {
             const c3 = (color >> 0) & 0xFF;
 
             // put left pixel in
-            let leftAntialiasAlpha = c3 * leftEdgeTriRatio / 0xFF;
-            buffer.data[base + 0] = lerp(buffer.data[base + 0], c0, leftAntialiasAlpha);
-            buffer.data[base + 1] = lerp(buffer.data[base + 1], c1, leftAntialiasAlpha);
-            buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, leftAntialiasAlpha);
-            base += 4;
+            // let leftAntialiasAlpha = c3 * (leftEdgeTriRatio / 0xFF);
+            // buffer.data[base + 0] = lerp(buffer.data[base + 0], c0, leftAntialiasAlpha);
+            // buffer.data[base + 1] = lerp(buffer.data[base + 1], c1, leftAntialiasAlpha);
+            // buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, leftAntialiasAlpha);
+            // base += 4;
 
             for (let p = 0; p < lineLength; p++) {
-                buffer.data[base + 0] = lerp(buffer.data[base + 0], c0, c3); /* R */;
-                buffer.data[base + 1] = lerp(buffer.data[base + 1], c1, c3); /* G */;
-                buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, c3); /* B */;
+                buffer.data[base + 0] = lerp(buffer.data[base + 0], c0, c3 / 0xFF); /* R */;
+                buffer.data[base + 1] = lerp(buffer.data[base + 1], c1, c3 / 0xFF); /* G */;
+                buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, c3 / 0xFF); /* B */;
                 base += 4;
             }
 
-            pixelsFilled += lineLength + 2;
+            pixelsFilled += lineLength;
+            // pixelsFilled += lineLength + 2;
 
             // put right pixel in
-            let rightAntialiasAlpha = c3 * (rightEdgeTriRatio / 255);
-            buffer.data[base + 0] = lerp(buffer.data[base + 0], c0, rightAntialiasAlpha);
-            buffer.data[base + 1] = lerp(buffer.data[base + 1], c1, rightAntialiasAlpha);
-            buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, rightAntialiasAlpha);
-            base += 4;
+            // let rightAntialiasAlpha = c3 * (rightEdgeTriRatio / 0xFF);
+            // buffer.data[base + 0] = lerp(buffer.data[base + 0], c0, rightAntialiasAlpha);
+            // buffer.data[base + 1] = lerp(buffer.data[base + 1], c1, rightAntialiasAlpha);
+            // buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, rightAntialiasAlpha);
+            // base += 4;
 
             // put right pixel in 
         }
@@ -293,8 +295,8 @@ function drawDots() {
                 case 1: col = 0x00FF00FF; break;
                 case 2: col = 0x0000FFFF; break;
             }
-            let x = tri.verticesX[v];
-            let y = tri.verticesY[v];
+            let x = tri.verticesX[v] | 0;
+            let y = tri.verticesY[v] | 0;
             setPixel(x - 1, y - 1, col);
             setPixel(x + 0, y - 1, col);
             setPixel(x + 1, y - 1, col);
@@ -358,9 +360,9 @@ function frame(time: DOMHighResTimeStamp) {
         160, 128,
         96, 128,
 
-        0xFF0000FF,
-        0xFF0000FF,
-        0xFF0000FF,
+        0xFF00007F,
+        0xFF00007F,
+        0xFF00007F,
     );
 
     tris[1] = new Triangle(
@@ -368,22 +370,49 @@ function frame(time: DOMHighResTimeStamp) {
         160, 64,
         160, 128,
 
-        0xFF0000FF,
-        0xFF0000FF,
-        0xFF0000FF,
+        0xFF00007F,
+        0xFF00007F,
+        0xFF00007F,
+    );
+
+    tris[2] = new Triangle(
+        32 + 96, 64,
+        32 + 160, 128,
+        32 + 96, 128,
+
+        0x00FF007F,
+        0x00FF007F,
+        0x00FF007F,
+    );
+
+    tris[3] = new Triangle(
+        32 + 96, 64,
+        32 + 160, 64,
+        32 + 160, 128,
+
+        0x00FF007F,
+        0x00FF007F,
+        0x00FF007F,
     );
 
     // 79.57741211: 1 rotation per second
     let speedMul = 0.5;
     let rad = time / (Math.PI * 2 * 79.57741211 / speedMul);
+    // let rad = toRadians(parseInt((document.getElementById("slider")! as HTMLInputElement).value));
     let sin = Math.sin(rad);
     let cos = Math.cos(rad);
-    rotateTri(tris[0], WIDTH / 2, HEIGHT / 2, sin, cos);
-    rotateTri(tris[1], WIDTH / 2, HEIGHT / 2, sin, cos);
+    rotateTri(tris[0], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
+    rotateTri(tris[1], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
+    rotateTri(tris[2], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
+    rotateTri(tris[3], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
+    rotateTri(tris[2], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
+    rotateTri(tris[3], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
 
     debug(
-    `[${matrixTruncater(cos)}, ${matrixTruncater(-sin)}]
-     [${matrixTruncater(sin)}, ${matrixTruncater(cos)}]`
+        `[${matrixTruncater(cos)}, ${matrixTruncater(-sin)}]
+     [${matrixTruncater(sin)}, ${matrixTruncater(cos)}]
+     
+     Pixels filled: ${pixelsFilled}`
     );
 
     renderScene();
@@ -435,6 +464,11 @@ function rotateTri(tri: Triangle, originX: number, originY: number, sin: number,
 
 function toDegrees(radians: number) {
     return radians * (180 / Math.PI);
+}
+
+
+function toRadians(deg: number) {
+    return deg / (Math.PI * 2);
 }
 
 function matrixTruncater(num: number): string {
