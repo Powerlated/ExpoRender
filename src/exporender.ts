@@ -8,8 +8,9 @@ let crossVertIndex = 0;
 let crossX = 0;
 let crossY = 0;
 
-
 window.onload = () => {
+    init();
+
     window.canvas = document.getElementById("canvas") as HTMLCanvasElement;
     window.ctx = window.canvas.getContext("2d")!;
     if (window.canvas) {
@@ -69,6 +70,30 @@ class Triangle {
     colors = new Uint32Array(3);
 
     constructor(
+        x0: number | null,
+        y0: number | null,
+        x1: number | null,
+        y1: number | null,
+        x2: number | null,
+        y2: number | null,
+
+        color0: number | null,
+        color1: number | null,
+        color2: number | null,
+    ) {
+        this.verticesX[0] = x0 ?? 0;
+        this.verticesY[0] = y0 ?? 0;
+        this.verticesX[1] = x1 ?? 0;
+        this.verticesY[1] = y1 ?? 0;
+        this.verticesX[2] = x2 ?? 0;
+        this.verticesY[2] = y2 ?? 0;
+
+        this.colors[0] = color0 ?? 0;
+        this.colors[1] = color1 ?? 0;
+        this.colors[2] = color2 ?? 0;
+    }
+
+    set(
         x0: number,
         y0: number,
         x1: number,
@@ -93,17 +118,7 @@ class Triangle {
     }
 }
 
-let tris = new Array(1).fill(0).map(
-    () => new Triangle(
-        0, 0,
-        0, 0,
-        0, 0,
-
-        0xFF0000FF,
-        0xFF0000FF,
-        0xFF0000FF
-    )
-);
+let tris: Array<Triangle>;
 
 const WIDTH = 256;
 const HEIGHT = 192;
@@ -234,7 +249,7 @@ function renderScene() {
             // buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, leftAntialiasAlpha);
             // base += 4;
 
-            for (let p = 0; p < lineLength; p++) {
+            for (let p = 0; p <= lineLength; p++) {
                 buffer.data[base + 0] = lerp(buffer.data[base + 0], c0, c3 / 0xFF); /* R */;
                 buffer.data[base + 1] = lerp(buffer.data[base + 1], c1, c3 / 0xFF); /* G */;
                 buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, c3 / 0xFF); /* B */;
@@ -341,10 +356,25 @@ function clear() {
             buffer.data[pos++] = clearColor[j];
         }
     }
+    pixelsFilled += WIDTH * HEIGHT;
 }
 
 function display() {
     window.ctx.putImageData(buffer, 0, 0);
+}
+
+function init() {
+    tris = new Array(64).fill(0).map(
+        () => new Triangle(
+            0, 0,
+            0, 0,
+            0, 0,
+
+            0xFF0000FF,
+            0xFF0000FF,
+            0xFF0000FF
+        )
+    );
 }
 
 let time = 0;
@@ -355,58 +385,58 @@ function frame(time: DOMHighResTimeStamp) {
     // let x = lerp(0, 400, ratio);
 
     // clockwise winding order
-    tris[0] = new Triangle(
+    tris[0].set(
         96, 64,
         160, 128,
         96, 128,
 
-        0xFF00007F,
-        0xFF00007F,
-        0xFF00007F,
+        0xFF7F7FFF,
+        0xFF7F7FFF,
+        0xFF7F7FFF,
     );
 
-    tris[1] = new Triangle(
+    tris[1].set(
         96, 64,
         160, 64,
         160, 128,
 
-        0xFF00007F,
-        0xFF00007F,
-        0xFF00007F,
+        0xFF7F7FFF,
+        0xFF7F7FFF,
+        0xFF7F7FFF,
     );
 
-    tris[2] = new Triangle(
+    tris[2].set(
         32 + 96, 64,
         32 + 160, 128,
         32 + 96, 128,
 
-        0x00FF007F,
-        0x00FF007F,
-        0x00FF007F,
+        0x7FFF7FFF,
+        0x7FFF7FFF,
+        0x7FFF7FFF,
     );
 
-    tris[3] = new Triangle(
+    tris[3].set(
         32 + 96, 64,
         32 + 160, 64,
         32 + 160, 128,
 
-        0x00FF007F,
-        0x00FF007F,
-        0x00FF007F,
+        0x7FFF7FFF,
+        0x7FFF7FFF,
+        0x7FFF7FFF,
     );
 
     // 79.57741211: 1 rotation per second
     let speedMul = 0.5;
-    let rad = time / (Math.PI * 2 * 79.57741211 / speedMul);
-    // let rad = toRadians(parseInt((document.getElementById("slider")! as HTMLInputElement).value));
+    // let rad = time / (Math.PI * 2 * 79.57741211 / speedMul);
+    let rad = toRadians(parseInt((document.getElementById("slider")! as HTMLInputElement).value)) / (Math.PI * 2);
     let sin = Math.sin(rad);
     let cos = Math.cos(rad);
-    rotateTri(tris[0], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
-    rotateTri(tris[1], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
-    rotateTri(tris[2], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
-    rotateTri(tris[3], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
-    rotateTri(tris[2], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
-    rotateTri(tris[3], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
+    rotate(tris[0], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
+    rotate(tris[1], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
+    rotate(tris[2], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
+    rotate(tris[3], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
+    rotate(tris[2], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
+    rotate(tris[3], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
 
     debug(
         `[${matrixTruncater(cos)}, ${matrixTruncater(-sin)}]
@@ -452,14 +482,18 @@ function bounds(bMin: number, bMax: number, val: number): number {
     return max(bMin, min(bMax, val));
 }
 
-function rotateTri(tri: Triangle, originX: number, originY: number, sin: number, cos: number) {
+function transform(tri: Triangle, originX: number, originY: number, m0: number, m1: number, m2: number, m3: number) {
     for (let i = 0; i < 3; i++) {
         let origX = tri.verticesX[i];
         let origY = tri.verticesY[i];
-        // Translate point to origin
-        tri.verticesX[i] = originX + ((origX - originX) * cos - (origY - originY) * sin);
-        tri.verticesY[i] = originY + ((origX - originX) * sin + (origY - originY) * cos);
+        // Apply 2x2 matrix multiplication
+        tri.verticesX[i] = originX + ((origX - originX) * m0 + (origY - originY) * m1);
+        tri.verticesY[i] = originY + ((origX - originX) * m2 + (origY - originY) * m3);
     }
+}
+
+function rotate(tri: Triangle, originX: number, originY: number, sin: number, cos: number) {
+    transform(tri, originX, originY, cos, -sin, sin, cos);
 }
 
 function toDegrees(radians: number) {
