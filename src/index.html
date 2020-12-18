@@ -8,13 +8,23 @@
 
 <body>
     <h1>ExpoRender</h1>
-    <canvas id="canvas" width="256" height="192"></canvas>
+    <div id="horizontal">
+        <canvas id="canvas" width="256" height="192"></canvas>
+        <div id="buttons">
+            <div>Triangle Z<input id="triangle-0-z" type="range" min="-200" max="200" /></div>
+            <div>Z Translate<input id="z-slider" type="range" min="-400" max="400" /></div>
+            <div>X Translate<input id="x-slider" type="range" min="-180" max="179" /></div>
+            <div>Y Translate<input id="y-slider" type="range" min="-180" max="179" /></div>
+            <div>Fill Polygons<input id="fill" type="checkbox" checked="true" /></div>
+            <div>Render Wireframe<input id="wireframe" type="checkbox" /></div>
+            <div>Show Z Buffer<input id="render-z" type="checkbox" /></div>
+            <div>Depth Test<input id="depth-test" type="checkbox" checked="true"/></div>
+            <div>SSAO<input id="ssao" type="checkbox" checked="true"/></div>
+        </div>
+    </div>
     <div id="container">
         <p id="info"></p>
         <p id="debug"></p>
-        <div id="buttons">
-            <input id="slider" type="range" min="0" max="359"/>
-        </div>
     </div>
 </body>
 
