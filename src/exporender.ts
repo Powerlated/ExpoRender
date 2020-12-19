@@ -123,6 +123,14 @@ function debug(msg: any) {
     debugElement.innerText = msg;
 }
 
+class VertexData {
+    x: number = 0;
+    y: number = 0;
+    z: number = 0;
+
+    color: number = 0;
+}
+
 class Triangle {
     verticesX = new Int32Array(3);
     verticesY = new Int32Array(3);
@@ -209,9 +217,7 @@ const G_BUFFER_EMPTY_VAL = 2147483647;
 
 let pixelsFilled = 0;
 
-let verticesXBuf = new Float64Array(3);
-let verticesYBuf = new Float64Array(3);
-let verticesZBuf = new Float64Array(3);
+let vertexBuf = new Array(3).fill(0).map(() => new VertexData());
 
 let globalTranslateX = -120;
 let globalTranslateY = 0;
@@ -238,9 +244,10 @@ function rasterize() {
 
             for (let v = 0; v < 3; v++) {
                 // Place vertices into temporary buffers
-                verticesXBuf[v] = tri.verticesX[v];
-                verticesYBuf[v] = tri.verticesY[v];
-                verticesZBuf[v] = tri.verticesZ[v];
+                vertexBuf[v].x = tri.verticesX[v];
+                vertexBuf[v].y = tri.verticesY[v];
+                vertexBuf[v].z = tri.verticesZ[v];
+                vertexBuf[v].color = tri.colors[v];
             }
 
             let color = tri.colors[0];
@@ -260,75 +267,43 @@ function rasterize() {
             let i = 1;
             while (i < 3 /* length */) {
                 let j = i;
-                while (j > 0 && verticesYBuf[j - 1] > verticesYBuf[j]) {
-                    let tempX = verticesXBuf[j];
-                    let tempY = verticesYBuf[j];
-                    let tempZ = verticesZBuf[j];
-
-                    verticesXBuf[j] = verticesXBuf[j - 1];
-                    verticesYBuf[j] = verticesYBuf[j - 1];
-                    verticesZBuf[j] = verticesZBuf[j - 1];
-
-                    verticesXBuf[j - 1] = tempX;
-                    verticesYBuf[j - 1] = tempY;
-                    verticesZBuf[j - 1] = tempZ;
+                while (j > 0 && vertexBuf[j - 1].y > vertexBuf[j].y) {
+                    let tmp = vertexBuf[j];
+                    vertexBuf[j] = vertexBuf[j - 1];
+                    vertexBuf[j - 1] = tmp;
 
                     j--;
                 }
                 i++;
             }
 
-            let line = bounds(0, HEIGHT - 1, verticesYBuf[0]);
-            let endingLine = verticesYBuf[2];
+            let line = bounds(0, HEIGHT - 1, vertexBuf[0].y);
+            let endingLine = min(HEIGHT, vertexBuf[2].y);
 
             for (; line <= endingLine; line++) {
-                if (line >= HEIGHT) break;
                 // left edge: 0-1 
                 // right edge: 0-2 
-                let leftEdge0Color = tri.colors[1];
-                let leftEdge0X = verticesXBuf[1];
-                let leftEdge0Y = verticesYBuf[1];
-                let leftEdge0Z = verticesZBuf[1];
-                let leftEdge1Color = tri.colors[0];
-                let leftEdge1X = verticesXBuf[0];
-                let leftEdge1Y = verticesYBuf[0];
-                let leftEdge1Z = verticesZBuf[0];
+                let leftEdge0 = vertexBuf[1];
+                let leftEdge1 = vertexBuf[0];
 
-                let rightEdge0Color = tri.colors[0];
-                let rightEdge0X = verticesXBuf[0];
-                let rightEdge0Y = verticesYBuf[0];
-                let rightEdge0Z = verticesZBuf[0];
-                let rightEdge1Color = tri.colors[2];
-                let rightEdge1X = verticesXBuf[2];
-                let rightEdge1Y = verticesYBuf[2];
-                let rightEdge1Z = verticesZBuf[2];
+                let rightEdge0 = vertexBuf[0];
+                let rightEdge1 = vertexBuf[2];
 
-                if (line >= leftEdge0Y && !(rightEdge1Y == line && leftEdge0Y == line)) {
-                    leftEdge1X = rightEdge1X;
-                    leftEdge1Y = rightEdge1Y;
-                    leftEdge1Z = rightEdge1Z;
-                    leftEdge1Color = rightEdge1Color;
+                if (line >= leftEdge0.y && !(rightEdge1.y == line && leftEdge0.y == line)) {
+                    leftEdge1 = rightEdge1;
 
-                    let tmp = leftEdge1X;
-                    leftEdge1X = leftEdge0X;
-                    leftEdge0X = tmp;
-
-                    let tmpColor = leftEdge1Color;
-                    leftEdge1Color = leftEdge0Color;
-                    leftEdge0Color = tmpColor;
-
-                    let tmpZ = leftEdge1Z;
-                    leftEdge1Z = leftEdge0Z;
-                    leftEdge0Z = tmpZ;
+                    let tmp = leftEdge1;
+                    leftEdge1 = leftEdge0;
+                    leftEdge0 = tmp;
 
                     // color ^= 0xFFFFFF00;
                 }
 
-                let leftEdgeHeight = leftEdge1Y - leftEdge0Y;
-                let rightEdgeHeight = rightEdge1Y - rightEdge0Y;
+                let leftEdgeHeight = leftEdge1.y - leftEdge0.y;
+                let rightEdgeHeight = rightEdge1.y - rightEdge0.y;
 
-                let leftEdgeStartY = min(leftEdge1Y, leftEdge0Y);
-                let rightEdgeStartY = min(rightEdge1Y, rightEdge0Y);
+                let leftEdgeStartY = min(leftEdge1.y, leftEdge0.y);
+                let rightEdgeStartY = min(rightEdge1.y, rightEdge0.y);
 
                 let leftEdgeRelativeY = line - leftEdgeStartY;
                 let rightEdgeRelativeY = line - rightEdgeStartY;
@@ -336,11 +311,11 @@ function rasterize() {
                 let leftEdgeXRatio = abs(leftEdgeRelativeY / leftEdgeHeight);
                 let rightEdgeXRatio = abs(rightEdgeRelativeY / rightEdgeHeight);
 
-                let leftEdgeColorLerped = lerpColor(leftEdge1Color, leftEdge0Color, leftEdgeXRatio);
-                let rightEdgeColorLerped = lerpColor(rightEdge0Color, rightEdge1Color, rightEdgeXRatio);
+                let leftEdgeColorLerped = lerpColor(leftEdge1.color, leftEdge0.color, leftEdgeXRatio);
+                let rightEdgeColorLerped = lerpColor(rightEdge0.color, rightEdge1.color, rightEdgeXRatio);
 
-                let leftEdgeZLerped = lerp(leftEdge1Z, leftEdge0Z, leftEdgeXRatio);
-                let rightEdgeZLerped = lerp(rightEdge0Z, rightEdge1Z, rightEdgeXRatio);
+                let leftEdgeZLerped = lerp(leftEdge1.z, leftEdge0.z, leftEdgeXRatio);
+                let rightEdgeZLerped = lerp(rightEdge0.z, rightEdge1.z, rightEdgeXRatio);
 
                 // debug(`
                 //     L: ${leftEdgeHeight}
@@ -352,8 +327,8 @@ function rasterize() {
 
                 // console.log(`left X: ${leftEdge0X}`)
 
-                let leftEdgeLerped = lerp(leftEdge1X, leftEdge0X, leftEdgeXRatio) | 0;
-                let rightEdgeLerped = lerp(rightEdge0X, rightEdge1X, rightEdgeXRatio) | 0;
+                let leftEdgeLerped = lerp(leftEdge1.x, leftEdge0.x, leftEdgeXRatio) | 0;
+                let rightEdgeLerped = lerp(rightEdge0.x, rightEdge1.x, rightEdgeXRatio) | 0;
 
                 // If the left is to the right of the right for some reason, swap left and right
                 // (allow arbitrary winding order)
@@ -843,14 +818,14 @@ function processTransformations() {
                 renderTri.verticesX[j] = centeredX + HALF_WIDTH;
                 renderTri.verticesY[j] = centeredY + HALF_HEIGHT;
             }
-            renderTri.verticesZ[j] = preTri.verticesZ[j];
+            renderTri.verticesZ[j] = (preTri.verticesZ[j] / ((z / 100) + 1));
             renderTri.colors[j] = preTri.colors[j];
         }
 
         if (rotate) {
             let sin = Math.sin(x);
             let cos = Math.cos(x);
-            rotateTri(renderTris[i], HALF_WIDTH, HALF_HEIGHT, sin, cos);
+            rotateTri2d(renderTris[i], HALF_WIDTH, HALF_HEIGHT, sin, cos);
         }
 
         renderTrisCount++;
@@ -904,7 +879,7 @@ function bounds(bMin: number, bMax: number, val: number): number {
     return max(bMin, min(bMax, val));
 }
 
-function transformTri(tri: Triangle, originX: number, originY: number, m0: number, m1: number, m2: number, m3: number) {
+function transformTri2d(tri: Triangle, originX: number, originY: number, m0: number, m1: number, m2: number, m3: number) {
     for (let i = 0; i < 3; i++) {
         let origX = tri.verticesX[i];
         let origY = tri.verticesY[i];
@@ -914,8 +889,8 @@ function transformTri(tri: Triangle, originX: number, originY: number, m0: numbe
     }
 }
 
-function rotateTri(tri: Triangle, originX: number, originY: number, sin: number, cos: number) {
-    transformTri(tri, originX, originY, cos, -sin, sin, cos);
+function rotateTri2d(tri: Triangle, originX: number, originY: number, sin: number, cos: number) {
+    transformTri2d(tri, originX, originY, cos, -sin, sin, cos);
 }
 
 function toDegrees(radians: number) {
