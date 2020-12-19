@@ -61,8 +61,8 @@ window.onload = () => {
     canvasElement.onclick = (evt) => {
         let x = crossX - globalTranslateX - HALF_WIDTH;
         let y = crossY - globalTranslateY - HALF_HEIGHT;
-        tris[0].verticesX[crossVertIndex] = (x / ((globalTranslateZ / 100) + 1)) + HALF_WIDTH;
-        tris[0].verticesY[crossVertIndex] = (y / ((globalTranslateZ / 100) + 1)) + HALF_HEIGHT;
+        tris[0].verticesX[crossVertIndex] = x + HALF_WIDTH;
+        tris[0].verticesY[crossVertIndex] = y + HALF_HEIGHT;
 
         // tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
         // tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
@@ -213,9 +213,10 @@ let buffer = new ImageData(WIDTH, HEIGHT);
 let zBuffer = new Float64Array(WIDTH * HEIGHT);
 let gBuffer = new Uint32Array(WIDTH * HEIGHT);
 let clearColor = Uint8Array.of(0xDD, 0xDD, 0xDD, 0xFF);
-const G_BUFFER_EMPTY_VAL = 2147483647;
+const G_BUFFER_EMPTY_VAL = 4294967295;
 
 let pixelsFilled = 0;
+let linesFilled = 0;
 
 let vertexBuf = new Array(3).fill(0).map(() => new VertexData());
 
@@ -438,6 +439,7 @@ function rasterize() {
                 }
 
                 pixelsFilled += lineLength;
+                linesFilled++;
             }
         }
     }
@@ -470,50 +472,54 @@ let a = 1;
 let b = 0.5;
 
 function postProcess() {
-    let screenIndex = 0;
-    for (let p = 1; p < WIDTH * (HEIGHT - 1); p++) {
-        if (gBuffer[p] != G_BUFFER_EMPTY_VAL) {
-            let core = zBuffer[p];
-            let occlusion = 0;
+    for (let y = 1; y < HEIGHT - 1; y++) {
+        let p = (WIDTH * 1) * y + 1;
+        let screenIndex = p * 4;
+        for (let x = 1; x < WIDTH - 1; x++) {
+            if (gBuffer[p] != G_BUFFER_EMPTY_VAL) {
+                let core = zBuffer[p];
+                let occlusion = 0;
 
-            // Sample 3x3 area - index up 1 and left 1 
-            const initIndex = (p - (WIDTH * 1)) - 1;
-            let index = initIndex;
+                // Sample 3x3 area - index up 1 and left 1 
+                const initIndex = (p - (WIDTH * 1)) - 1;
+                let index = initIndex;
 
-            let factor = 1;
+                let factor = 1;
 
-            for (let i = 0; i < 3; i++) {
-                let subIndex = index;
-                for (let j = 0; j < 3; j++) {
-                    if (gBuffer[subIndex] != G_BUFFER_EMPTY_VAL) {
-                        let depth = zBuffer[subIndex];
-                        const threshold = 32;
-                        let diff = abs(depth - core);
-                        if (diff > threshold) {
-                            diff *= smoothstep(1, 0, (diff + threshold) / 64);
+                for (let i = 0; i < 3; i++) {
+                    let subIndex = index;
+                    for (let j = 0; j < 3; j++) {
+                        if (gBuffer[subIndex] != G_BUFFER_EMPTY_VAL) {
+                            let depth = zBuffer[subIndex];
+                            const threshold = 32;
+                            let diff = abs(depth - core);
+                            if (diff > threshold) {
+                                diff *= smoothstep(1, 0, (diff + threshold) / 64);
+                            }
+                            occlusion += diff;
                         }
-                        occlusion += diff;
-                    }
 
-                    subIndex++;
+                        subIndex++;
+                    }
+                    index += WIDTH;
                 }
-                index += WIDTH;
+
+                // Edge marking
+                if (gBuffer[p - 1] == G_BUFFER_EMPTY_VAL) factor = 0.5;
+                if (gBuffer[p + 1] == G_BUFFER_EMPTY_VAL) factor = 0.5;
+                if (gBuffer[p + WIDTH] == G_BUFFER_EMPTY_VAL) factor = 0.5;
+                if (gBuffer[p - WIDTH] == G_BUFFER_EMPTY_VAL) factor = 0.5;
+
+                let sub = max(0, occlusion) / 2;
+
+                buffer.data[screenIndex + 0] = (buffer.data[screenIndex + 0] - sub) * factor;
+                buffer.data[screenIndex + 1] = (buffer.data[screenIndex + 1] - sub) * factor;
+                buffer.data[screenIndex + 2] = (buffer.data[screenIndex + 2] - sub) * factor;
             }
 
-            // Edge marking
-            if (gBuffer[p - 1] == G_BUFFER_EMPTY_VAL) factor = 0.5;
-            if (gBuffer[p + 1] == G_BUFFER_EMPTY_VAL) factor = 0.5;
-            if (gBuffer[p + WIDTH] == G_BUFFER_EMPTY_VAL) factor = 0.5;
-            if (gBuffer[p - WIDTH] == G_BUFFER_EMPTY_VAL) factor = 0.5;
-
-            let sub = max(0, occlusion) / 2;
-
-            buffer.data[screenIndex + 0 + 4] = (buffer.data[screenIndex + 0 + 4] - sub) * factor;
-            buffer.data[screenIndex + 1 + 4] = (buffer.data[screenIndex + 1 + 4] - sub) * factor;
-            buffer.data[screenIndex + 2 + 4] = (buffer.data[screenIndex + 2 + 4] - sub) * factor;
+            screenIndex += 4;
+            p++;
         }
-
-        screenIndex += 4;
     }
 }
 
@@ -689,7 +695,7 @@ function display() {
 }
 
 function init() {
-    tris = new Array(4).fill(0).map(
+    tris = new Array(1).fill(0).map(
         () => new Triangle(
             0, 0, 0,
             0, 0, 0,
@@ -790,11 +796,19 @@ function frame(time: DOMHighResTimeStamp) {
 
     if (time >= frameTimeCounterNext) {
         frameTimeCounterNext += 1000;
-        debug("FPS: " + frameCount);
+        debug(
+            `FPS: ${frameCount}
+             Lines: ${linesFilled}
+             Tris: ${renderTrisCount}
+             Pixels: ${pixelsFilled}
+             `
+        );
         frameCount = 0;
     }
-}
 
+    linesFilled = 0;
+    pixelsFilled = 0;
+}
 
 let x = 0;
 let x2 = 0;
