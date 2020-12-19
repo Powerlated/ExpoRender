@@ -4,6 +4,8 @@ interface Window {
 }
 
 let crossVertIndex = 0;
+let frameCount = 0;
+let frameTimeCounterNext = 0;
 
 let crossX = 0;
 let crossY = 0;
@@ -15,7 +17,7 @@ window.onload = () => {
 
     function dropHandler(ev: Event | any) {
         if (ev.dataTransfer.files[0] instanceof Blob) {
-            console.log('File(s) dropped');
+            console.log("File(s) dropped");
 
             ev.preventDefault();
 
@@ -57,8 +59,13 @@ window.onload = () => {
     tris[0].colors[2] = 0x0000FFFF;
 
     canvasElement.onclick = (evt) => {
-        tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
-        tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
+        let x = crossX - globalTranslateX - HALF_WIDTH;
+        let y = crossY - globalTranslateY - HALF_HEIGHT;
+        tris[0].verticesX[crossVertIndex] = (x / ((globalTranslateZ / 100) + 1)) + HALF_WIDTH;
+        tris[0].verticesY[crossVertIndex] = (y / ((globalTranslateZ / 100) + 1)) + HALF_HEIGHT;
+
+        // tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
+        // tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
 
         crossVertIndex++;
 
@@ -67,7 +74,7 @@ window.onload = () => {
         }
     };
 
-    canvasElement.style.cursor = 'none';
+    canvasElement.style.cursor = "none";
     canvasElement.onmousemove = (evt) => {
         infoElement.innerText = `
         Pos X: ${crossX}
@@ -84,21 +91,25 @@ window.onload = () => {
         crossY = ((evt.clientY - rect.top) / ratio) | 0;
     };
 
-    document.getElementById('fill')!.onclick = e => { fill = (e as any).target.checked; };
-    document.getElementById('wireframe')!.onclick = e => { wireframe = (e as any).target.checked; };
-    document.getElementById('render-z')!.onclick = e => { renderZ = (e as any).target.checked; };
-    document.getElementById('depth-test')!.onclick = e => { depthTest = (e as any).target.checked; };
-    document.getElementById('ssao')!.onclick = e => { ssao = (e as any).target.checked; };
+    document.getElementById("rotate")!.onclick = e => { rotate = (e as any).target.checked; };
+    document.getElementById("fill")!.onclick = e => { fill = (e as any).target.checked; };
+    document.getElementById("wireframe")!.onclick = e => { wireframe = (e as any).target.checked; };
+    document.getElementById("render-z")!.onclick = e => { renderZ = (e as any).target.checked; };
+    document.getElementById("depth-test")!.onclick = e => { depthTest = (e as any).target.checked; };
+    document.getElementById("ssao")!.onclick = e => { ssao = (e as any).target.checked; };
+    document.getElementById("perspective-transform")!.onclick = e => { perspectiveTransform = (e as any).target.checked; };
     document.getElementById("triangle-0-z")!.oninput = e => { triangle0Z = parseInt((e as any).target.value); };
     document.getElementById("x-slider")!.oninput = e => { globalTranslateX = parseInt((e as any).target.value); };
     document.getElementById("y-slider")!.oninput = e => { globalTranslateY = parseInt((e as any).target.value); };
     document.getElementById("z-slider")!.oninput = e => { globalTranslateZ = parseInt((e as any).target.value); };
 
-    fill = (document.getElementById('fill') as any).checked;
-    wireframe = (document.getElementById('wireframe') as any).checked;
-    renderZ = (document.getElementById('render-z') as any).checked;
-    depthTest = (document.getElementById('depth-test') as any).checked;
-    ssao = (document.getElementById('ssao') as any).checked;
+    rotate = (document.getElementById("rotate") as any).checked;
+    fill = (document.getElementById("fill") as any).checked;
+    wireframe = (document.getElementById("wireframe") as any).checked;
+    renderZ = (document.getElementById("render-z") as any).checked;
+    depthTest = (document.getElementById("depth-test") as any).checked;
+    ssao = (document.getElementById("ssao") as any).checked;
+    perspectiveTransform = (document.getElementById("perspective-transform") as any).checked;
     triangle0Z = parseInt((document.getElementById("triangle-0-z") as any).value);
     globalTranslateX = parseInt((document.getElementById("x-slider") as any).value);
     globalTranslateY = parseInt((document.getElementById("y-slider") as any).value);
@@ -186,6 +197,8 @@ let renderTrisCount = 0;
 
 const WIDTH = 256;
 const HEIGHT = 192;
+const HALF_WIDTH = WIDTH / 2;
+const HALF_HEIGHT = HEIGHT / 2;
 const BYTES_PER_PIXEL = 4;
 
 let buffer = new ImageData(WIDTH, HEIGHT);
@@ -205,7 +218,9 @@ let globalTranslateY = 0;
 let globalTranslateZ = 0;
 
 let ssao = true;
+let perspectiveTransform = true;
 let fill = true;
+let rotate = false;
 let wireframe = false;
 let renderZ = false;
 let depthTest = true;
@@ -337,8 +352,8 @@ function rasterize() {
 
                 // console.log(`left X: ${leftEdge0X}`)
 
-                let leftEdgeLerped = bounds(-1, WIDTH - 1, lerp(leftEdge1X, leftEdge0X, leftEdgeXRatio));
-                let rightEdgeLerped = bounds(-1, WIDTH - 1, lerp(rightEdge0X, rightEdge1X, rightEdgeXRatio));
+                let leftEdgeLerped = lerp(leftEdge1X, leftEdge0X, leftEdgeXRatio) | 0;
+                let rightEdgeLerped = lerp(rightEdge0X, rightEdge1X, rightEdgeXRatio) | 0;
 
                 // If the left is to the right of the right for some reason, swap left and right
                 // (allow arbitrary winding order)
@@ -363,6 +378,29 @@ function rasterize() {
                 c11 = (rightEdgeColorLerped >> 16) & 0xFF;
                 c12 = (rightEdgeColorLerped >> 8) & 0xFF;
 
+                let lineLengthNoClip = (rightEdgeLerped | 0) - (leftEdgeLerped | 0);
+
+                let z = leftEdgeZLerped;
+                let c0 = c00;
+                let c1 = c01;
+                let c2 = c02;
+
+                let zPerPixel = (rightEdgeZLerped - leftEdgeZLerped) / lineLengthNoClip;
+                let c0PerPixel = (c10 - c00) / lineLengthNoClip;
+                let c1PerPixel = (c11 - c01) / lineLengthNoClip;
+                let c2PerPixel = (c12 - c02) / lineLengthNoClip;
+
+                if (leftEdgeLerped < 0) {
+                    z -= zPerPixel * leftEdgeLerped;
+                    c0 -= c0PerPixel * leftEdgeLerped;
+                    c1 -= c1PerPixel * leftEdgeLerped;
+                    c2 -= c2PerPixel * leftEdgeLerped;
+
+                    leftEdgeLerped = -1;
+                }
+
+                rightEdgeLerped = bounds(-1, WIDTH - 1, rightEdgeLerped);
+
                 let leftEdgeLerpedRounded = leftEdgeLerped | 0;
                 let rightEdgeLerpedRounded = rightEdgeLerped | 0;
 
@@ -381,19 +419,18 @@ function rasterize() {
 
                 if (!renderZ) {
                     for (let p = 0; p < lineLength; p++) {
-                        let lineFactor = p / lineLength;
-                        let z = lerp(leftEdgeZLerped, rightEdgeZLerped, lineFactor);
+                        z += zPerPixel;
 
-                        if (z < zBuffer[zBase] || !depthTest) {
-                            let c0 = lerp(c00, c10, lineFactor);
-                            let c1 = lerp(c01, c11, lineFactor);
-                            let c2 = lerp(c02, c12, lineFactor);
+                        if ((z < zBuffer[zBase] || !depthTest)) {
+                            c0 += c0PerPixel;
+                            c1 += c1PerPixel;
+                            c2 += c2PerPixel;
 
                             let factor = 1;
 
-                            buffer.data[base + 0] = lerp(buffer.data[base + 0], c0, c3 / 0xFF) * factor; /* R */;
-                            buffer.data[base + 1] = lerp(buffer.data[base + 1], c1, c3 / 0xFF) * factor; /* G */;
-                            buffer.data[base + 2] = lerp(buffer.data[base + 2], c2, c3 / 0xFF) * factor; /* B */;
+                            buffer.data[base + 0] = c0 * factor; /* R */;
+                            buffer.data[base + 1] = c1 * factor; /* G */;
+                            buffer.data[base + 2] = c2 * factor; /* B */;
 
                             zBuffer[zBase] = z;
                             gBuffer[zBase] = t;
@@ -404,10 +441,9 @@ function rasterize() {
                     }
                 } else {
                     for (let p = 0; p < lineLength; p++) {
-                        let lineFactor = p / lineLength;
-                        let z = lerp(leftEdgeZLerped, rightEdgeZLerped, lineFactor);
+                        z += zPerPixel;
 
-                        if (z < zBuffer[zBase] || !depthTest) {
+                        if ((z < zBuffer[zBase] || !depthTest)) {
                             let renderZ = z;
                             if (renderZ < lowZ) lowZ = renderZ;
                             if (renderZ > highZ) highZ = renderZ;
@@ -458,47 +494,48 @@ function rasterize() {
 let a = 1;
 let b = 0.5;
 
-function applySsao() {
+function postProcess() {
     let screenIndex = 0;
-    for (let p = 0; p < WIDTH * HEIGHT; p++) {
+    for (let p = 1; p < WIDTH * (HEIGHT - 1); p++) {
         if (gBuffer[p] != G_BUFFER_EMPTY_VAL) {
             let core = zBuffer[p];
             let occlusion = 0;
 
-            // Sample 5x5 area - index up 2 and left 2 
-            let index = (p - (WIDTH * 2)) - 2;
-            if (index < 0) {
-                screenIndex += 4;
-                continue;
-            }
+            // Sample 3x3 area - index up 1 and left 1 
+            const initIndex = (p - (WIDTH * 1)) - 1;
+            let index = initIndex;
 
-            for (let i = 0; i < 5; i++) {
+            let factor = 1;
+
+            for (let i = 0; i < 3; i++) {
                 let subIndex = index;
-                for (let j = 0; j < 5; j++) {
-                    if (index > WIDTH * HEIGHT) {
-                        subIndex++;
-                        continue;
-                    }
+                for (let j = 0; j < 3; j++) {
                     if (gBuffer[subIndex] != G_BUFFER_EMPTY_VAL) {
-                        let depth = zBuffer[subIndex++];
-                        const threshold = 0;
+                        let depth = zBuffer[subIndex];
+                        const threshold = 32;
                         let diff = abs(depth - core);
                         if (diff > threshold) {
-                            diff *= smoothstep(0.5, 0, (diff + threshold) / 128);
+                            diff *= smoothstep(1, 0, (diff + threshold) / 64);
                         }
                         occlusion += diff;
-                    } else {
-                        subIndex++;
                     }
+
+                    subIndex++;
                 }
                 index += WIDTH;
             }
 
-            let factor = max(0, occlusion) / 2;
+            // Edge marking
+            if (gBuffer[p - 1] == G_BUFFER_EMPTY_VAL) factor = 0.5;
+            if (gBuffer[p + 1] == G_BUFFER_EMPTY_VAL) factor = 0.5;
+            if (gBuffer[p + WIDTH] == G_BUFFER_EMPTY_VAL) factor = 0.5;
+            if (gBuffer[p - WIDTH] == G_BUFFER_EMPTY_VAL) factor = 0.5;
 
-            buffer.data[screenIndex + 0] = buffer.data[screenIndex + 0] - factor;
-            buffer.data[screenIndex + 1] = buffer.data[screenIndex + 1] - factor;
-            buffer.data[screenIndex + 2] = buffer.data[screenIndex + 2] - factor;
+            let sub = max(0, occlusion) / 2;
+
+            buffer.data[screenIndex + 0 + 4] = (buffer.data[screenIndex + 0 + 4] - sub) * factor;
+            buffer.data[screenIndex + 1 + 4] = (buffer.data[screenIndex + 1 + 4] - sub) * factor;
+            buffer.data[screenIndex + 2 + 4] = (buffer.data[screenIndex + 2 + 4] - sub) * factor;
         }
 
         screenIndex += 4;
@@ -507,7 +544,7 @@ function applySsao() {
 
 
 
-// Implementation of Bresenham's line algorithm
+// Implementation of Bresenham"s line algorithm
 function drawLine(x0: number, y0: number, x1: number, y1: number, color: number) {
     let low: boolean;
     let swap: boolean;
@@ -618,14 +655,9 @@ function invertColorAt(x: number, y: number) {
 
 function drawDots() {
     for (let t = 0; t < tris.length; t++) {
-        let tri = tris[t];
+        let tri = renderTris[t];
         for (let v = 0; v < 3; v++) {
-            let col = 0x000000FF;
-            switch (v) {
-                case 0: col = 0xFF0000FF; break;
-                case 1: col = 0x00FF00FF; break;
-                case 2: col = 0x0000FFFF; break;
-            }
+            let col = tri.colors[v];
             let x = tri.verticesX[v] | 0;
             let y = tri.verticesY[v] | 0;
             setPixel(x - 1, y - 1, col);
@@ -697,9 +729,7 @@ function init() {
     renderTris = new Array(4);
 }
 
-let time = 0;
-function frame(delta: DOMHighResTimeStamp) {
-    time += delta;
+function frame(time: DOMHighResTimeStamp) {
     // let ratio = (Math.sin(time / 1000) + 1) / 2;
     // let x = lerp(0, 400, ratio);
 
@@ -773,15 +803,26 @@ function frame(delta: DOMHighResTimeStamp) {
 
     processTransformations();
     rasterize();
-    if (ssao) applySsao();
+    if (ssao) postProcess();
 
     // drawDots();
     drawCrosshair();
 
     display();
     clear();
+
+    frameCount++;
+
+    if (time >= frameTimeCounterNext) {
+        frameTimeCounterNext += 1000;
+        debug("FPS: " + frameCount);
+        frameCount = 0;
+    }
 }
 
+
+let x = 0;
+let x2 = 0;
 function processTransformations() {
     renderTrisCount = 0;
     for (let i = 0; i < tris.length; i++) {
@@ -790,22 +831,32 @@ function processTransformations() {
         }
         let preTri = tris[i];
 
-        const HALF_WIDTH = WIDTH / 2;
-        const HALF_HEIGHT = HEIGHT / 2;
-
         let renderTri = renderTris[i];
         for (let j = 0; j < 3; j++) {
             let centeredX = (preTri.verticesX[j] + globalTranslateX) - HALF_WIDTH;
             let centeredY = (preTri.verticesY[j] + globalTranslateY) - HALF_HEIGHT;
             let z = preTri.verticesZ[j] - globalTranslateZ;
-            renderTri.verticesX[j] = (centeredX / ((z / 100) + 1)) + HALF_WIDTH;
-            renderTri.verticesY[j] = (centeredY / ((z / 100) + 1)) + HALF_HEIGHT;
+            if (perspectiveTransform) {
+                renderTri.verticesX[j] = (centeredX / ((z / 100) + 1)) + HALF_WIDTH;
+                renderTri.verticesY[j] = (centeredY / ((z / 100) + 1)) + HALF_HEIGHT;
+            } else {
+                renderTri.verticesX[j] = centeredX + HALF_WIDTH;
+                renderTri.verticesY[j] = centeredY + HALF_HEIGHT;
+            }
             renderTri.verticesZ[j] = preTri.verticesZ[j];
             renderTri.colors[j] = preTri.colors[j];
         }
 
+        if (rotate) {
+            let sin = Math.sin(x);
+            let cos = Math.cos(x);
+            rotateTri(renderTris[i], HALF_WIDTH, HALF_HEIGHT, sin, cos);
+        }
+
         renderTrisCount++;
     }
+    x += Math.PI / (144 * 4);
+    x2 += Math.PI / (144);
 }
 
 function frameDriver(time: DOMHighResTimeStamp) {
@@ -853,7 +904,7 @@ function bounds(bMin: number, bMax: number, val: number): number {
     return max(bMin, min(bMax, val));
 }
 
-function transform(tri: Triangle, originX: number, originY: number, m0: number, m1: number, m2: number, m3: number) {
+function transformTri(tri: Triangle, originX: number, originY: number, m0: number, m1: number, m2: number, m3: number) {
     for (let i = 0; i < 3; i++) {
         let origX = tri.verticesX[i];
         let origY = tri.verticesY[i];
@@ -863,14 +914,13 @@ function transform(tri: Triangle, originX: number, originY: number, m0: number, 
     }
 }
 
-function rotate(tri: Triangle, originX: number, originY: number, sin: number, cos: number) {
-    transform(tri, originX, originY, cos, -sin, sin, cos);
+function rotateTri(tri: Triangle, originX: number, originY: number, sin: number, cos: number) {
+    transformTri(tri, originX, originY, cos, -sin, sin, cos);
 }
 
 function toDegrees(radians: number) {
     return radians * (180 / Math.PI);
 }
-
 
 function toRadians(deg: number) {
     return deg / (Math.PI * 2);
@@ -879,7 +929,7 @@ function toRadians(deg: number) {
 function matrixTruncater(num: number): string {
     let trunc = 10000;
     if (num < 0) trunc = 1000;
-    return r_pad((((num * trunc) | 0) / trunc).toString(), 6, '0');
+    return r_pad((((num * trunc) | 0) / trunc).toString(), 6, "0");
 }
 
 function smoothstep(edge0: number, edge1: number, x: number) {
@@ -896,14 +946,14 @@ function clamp(x: number, lowerlimit: number, upperlimit: number) {
 }
 
 function pad(n: string, width: number, z: string) {
-    z = z || '0';
-    n = n + '';
+    z = z || "0";
+    n = n + "";
     return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
 }
 
 function r_pad(n: string, width: number, z: string) {
-    z = z || '0';
-    n = n + '';
+    z = z || "0";
+    n = n + "";
     return n.length >= width ? n : n + new Array(width - n.length + 1).join(z);
 }
 
@@ -971,7 +1021,7 @@ function parseObjFile(objFile: string) {
     console.log("Loading OBJ...");
     // console.log(objFile);
 
-    let splitObjFile = objFile.split('\n');
+    let splitObjFile = objFile.split("\n");
     let lineIndex = 0;
 
     let positionArr: Vec3[] = [];
@@ -980,7 +1030,7 @@ function parseObjFile(objFile: string) {
 
     while (lineIndex < splitObjFile.length) {
         let line = splitObjFile[lineIndex++];
-        let splitLine = line.split(' ');
+        let splitLine = line.split(" ");
         // console.log(line);
         let splitLineIndex = 0;
 
@@ -1014,6 +1064,7 @@ function parseObjFile(objFile: string) {
                     case 2: color = 0x0000FFFF; break;
                 }
                 color = 0x7F7F7FFF;
+                color = 0xFFFFFFFF;
                 tri.colors[0] = color;
                 tri.colors[1] = color;
                 tri.colors[2] = color;
