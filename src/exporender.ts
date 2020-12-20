@@ -12,8 +12,41 @@ let crossY = 0;
 
 let triangle0Z = 0;
 
+let up = false;
+let down = false;
+let forward = false;
+let backward = false;
+let left = false;
+let right = false;
+
 window.onload = () => {
-    init();
+    function keyEvent(key: string, val: boolean) {
+        switch (key) {
+            case "Space": up = val; break;
+            case "ShiftLeft": down = val; break;
+            case "KeyW": forward = val; break;
+            case "KeyS": backward = val; break;
+            case "KeyA": left = val; break;
+            case "KeyD": right = val; break;
+        }
+    }
+
+    let block = ["Space", "ShiftLeft", "KeyW", "KeyS", "KeyA", "KeyD"];
+
+    document.onkeydown = function (e) {
+        if (block.includes(e.key)) {
+            e.preventDefault();
+        }
+
+        keyEvent(e.code, true);
+    };
+    document.onkeyup = function (e) {
+        if (block.includes(e.key)) {
+            e.preventDefault();
+        }
+
+        keyEvent(e.code, false);
+    };
 
     function dropHandler(ev: Event | any) {
         if (ev.dataTransfer.files[0] instanceof Blob) {
@@ -53,10 +86,6 @@ window.onload = () => {
 
     let infoElement = document.getElementById("info")!;
     let canvasElement = document.getElementById("canvas")!;
-
-    tris[0].colors[0] = 0xFF0000FF;
-    tris[0].colors[1] = 0x00FF00FF;
-    tris[0].colors[2] = 0x0000FFFF;
 
     canvasElement.onclick = (evt) => {
         let x = crossX - globalTranslateX - HALF_WIDTH;
@@ -102,6 +131,9 @@ window.onload = () => {
     document.getElementById("x-slider")!.oninput = e => { globalTranslateX = parseInt((e as any).target.value); };
     document.getElementById("y-slider")!.oninput = e => { globalTranslateY = parseInt((e as any).target.value); };
     document.getElementById("z-slider")!.oninput = e => { globalTranslateZ = parseInt((e as any).target.value); };
+    document.getElementById("x-rotation")!.oninput = e => { globalRotateX = parseInt((e as any).target.value); };
+    document.getElementById("y-rotation")!.oninput = e => { globalRotateY = parseInt((e as any).target.value); };
+    document.getElementById("vertex-dots")!.onclick = e => { vertexDots = (e as any).target.checked; };
 
     rotate = (document.getElementById("rotate") as any).checked;
     fill = (document.getElementById("fill") as any).checked;
@@ -114,6 +146,8 @@ window.onload = () => {
     globalTranslateX = parseInt((document.getElementById("x-slider") as any).value);
     globalTranslateY = parseInt((document.getElementById("y-slider") as any).value);
     globalTranslateZ = parseInt((document.getElementById("z-slider") as any).value);
+
+    init();
 
     requestAnimationFrame(frameDriver);
 };
@@ -136,36 +170,42 @@ class Triangle {
     verticesY = new Int32Array(3);
     verticesZ = new Int32Array(3);
 
-    colors = new Int32Array(3);
+    colors = new Uint32Array(3);
+
+    material = 0;
 
     constructor(
-        x0?: number,
-        y0?: number,
-        z0?: number,
-        x1?: number,
-        y1?: number,
-        z1?: number,
-        x2?: number,
-        y2?: number,
-        z2?: number,
+        x0: number = 0,
+        y0: number = 0,
+        z0: number = 0,
+        x1: number = 0,
+        y1: number = 0,
+        z1: number = 0,
+        x2: number = 0,
+        y2: number = 0,
+        z2: number = 0,
 
-        color0?: number,
-        color1?: number,
-        color2?: number,
+        color0: number = 0,
+        color1: number = 0,
+        color2: number = 0,
+
+        material: number = 0,
     ) {
-        this.verticesX[0] = x0 ?? 0;
-        this.verticesY[0] = y0 ?? 0;
-        this.verticesZ[0] = z0 ?? 0;
-        this.verticesX[1] = x1 ?? 0;
-        this.verticesY[1] = y1 ?? 0;
-        this.verticesZ[1] = z1 ?? 0;
-        this.verticesX[2] = x2 ?? 0;
-        this.verticesY[2] = y2 ?? 0;
-        this.verticesZ[2] = z2 ?? 0;
+        this.verticesX[0] = x0;
+        this.verticesY[0] = y0;
+        this.verticesZ[0] = z0;
+        this.verticesX[1] = x1;
+        this.verticesY[1] = y1;
+        this.verticesZ[1] = z1;
+        this.verticesX[2] = x2;
+        this.verticesY[2] = y2;
+        this.verticesZ[2] = z2;
 
-        this.colors[0] = color0 ?? 0;
-        this.colors[1] = color1 ?? 0;
-        this.colors[2] = color2 ?? 0;
+        this.colors[0] = color0;
+        this.colors[1] = color1;
+        this.colors[2] = color2;
+
+        this.material = material;
     }
 
     set(
@@ -211,9 +251,11 @@ const BYTES_PER_PIXEL = 4;
 
 let buffer = new ImageData(WIDTH, HEIGHT);
 let zBuffer = new Float64Array(WIDTH * HEIGHT);
+let zBufferAlwaysBlank = new Float64Array(WIDTH * HEIGHT);
 let gBuffer = new Uint32Array(WIDTH * HEIGHT);
 let clearColor = Uint8Array.of(0xDD, 0xDD, 0xDD, 0xFF);
-const G_BUFFER_EMPTY_VAL = 4294967295;
+const G_BUFFER_CLEAR_VAL = 4294967295;
+const Z_BUFFER_CLEAR_VAL = 2147483647;
 
 let pixelsFilled = 0;
 let linesFilled = 0;
@@ -223,8 +265,12 @@ let vertexBuf = new Array(3).fill(0).map(() => new VertexData());
 let globalTranslateX = -120;
 let globalTranslateY = 0;
 let globalTranslateZ = 0;
+let globalRotateX = 0;
+let globalRotateY = 0;
+let globalRotateZ = 0;
 
 let ssao = true;
+let vertexDots = false;
 let perspectiveTransform = true;
 let fill = true;
 let rotate = false;
@@ -239,9 +285,13 @@ function rasterize() {
     lowZ = 0;
     highZ = 0;
 
+    let activeZBuffer = depthTest ? zBuffer : zBufferAlwaysBlank;
+
     if (fill) {
         for (let t = 0; t < renderTrisCount; t++) {
             let tri = renderTris[t];
+
+            let materialId = tri.material;
 
             for (let v = 0; v < 3; v++) {
                 // Place vertices into temporary buffers
@@ -397,19 +447,17 @@ function rasterize() {
                     for (let p = 0; p < lineLength; p++) {
                         z += zPerPixel;
 
-                        if ((z < zBuffer[zBase] || !depthTest)) {
+                        if (z < activeZBuffer[zBase]) {
                             c0 += c0PerPixel;
                             c1 += c1PerPixel;
                             c2 += c2PerPixel;
 
-                            let factor = 1;
-
-                            buffer.data[base + 0] = c0 * factor; /* R */;
-                            buffer.data[base + 1] = c1 * factor; /* G */;
-                            buffer.data[base + 2] = c2 * factor; /* B */;
+                            buffer.data[base + 0] = c0; /* R */;
+                            buffer.data[base + 1] = c1; /* G */;
+                            buffer.data[base + 2] = c2; /* B */;
 
                             zBuffer[zBase] = z;
-                            gBuffer[zBase] = t;
+                            gBuffer[zBase] = materialId;
                         }
 
                         base += 4;
@@ -419,7 +467,7 @@ function rasterize() {
                     for (let p = 0; p < lineLength; p++) {
                         z += zPerPixel;
 
-                        if ((z < zBuffer[zBase] || !depthTest)) {
+                        if (z < activeZBuffer[zBase]) {
                             let renderZ = z;
                             if (renderZ < lowZ) lowZ = renderZ;
                             if (renderZ > highZ) highZ = renderZ;
@@ -476,20 +524,19 @@ function postProcess() {
         let p = (WIDTH * 1) * y + 1;
         let screenIndex = p * 4;
         for (let x = 1; x < WIDTH - 1; x++) {
-            if (gBuffer[p] != G_BUFFER_EMPTY_VAL) {
+            if (gBuffer[p] != G_BUFFER_CLEAR_VAL) {
                 let core = zBuffer[p];
                 let occlusion = 0;
 
+                // SSAO
                 // Sample 3x3 area - index up 1 and left 1 
                 const initIndex = (p - (WIDTH * 1)) - 1;
                 let index = initIndex;
 
-                let factor = 1;
-
                 for (let i = 0; i < 3; i++) {
                     let subIndex = index;
                     for (let j = 0; j < 3; j++) {
-                        if (gBuffer[subIndex] != G_BUFFER_EMPTY_VAL) {
+                        if (gBuffer[subIndex] != G_BUFFER_CLEAR_VAL) {
                             let depth = zBuffer[subIndex];
                             const threshold = 32;
                             let diff = abs(depth - core);
@@ -504,13 +551,20 @@ function postProcess() {
                     index += WIDTH;
                 }
 
-                // Edge marking
-                if (gBuffer[p - 1] == G_BUFFER_EMPTY_VAL) factor = 0.5;
-                if (gBuffer[p + 1] == G_BUFFER_EMPTY_VAL) factor = 0.5;
-                if (gBuffer[p + WIDTH] == G_BUFFER_EMPTY_VAL) factor = 0.5;
-                if (gBuffer[p - WIDTH] == G_BUFFER_EMPTY_VAL) factor = 0.5;
+                const materialId = gBuffer[p];
 
-                let sub = max(0, occlusion) / 2;
+                // Edge marking
+                let factor = 1;
+                if (
+                    gBuffer[p - 1] > materialId ||
+                    gBuffer[p + 1] > materialId ||
+                    gBuffer[p + WIDTH] > materialId ||
+                    gBuffer[p - WIDTH] > materialId
+                ) {
+                    factor = 0.5;
+                }
+
+                let sub = max(0, occlusion) * 2;
 
                 buffer.data[screenIndex + 0] = (buffer.data[screenIndex + 0] - sub) * factor;
                 buffer.data[screenIndex + 1] = (buffer.data[screenIndex + 1] - sub) * factor;
@@ -684,8 +738,8 @@ function clear() {
         for (let j = 0; j < BYTES_PER_PIXEL; j++) {
             buffer.data[pos++] = clearColor[j];
         }
-        zBuffer[i] = 2147483647;
-        gBuffer[i] = G_BUFFER_EMPTY_VAL;
+        zBuffer[i] = Z_BUFFER_CLEAR_VAL;
+        gBuffer[i] = G_BUFFER_CLEAR_VAL;
     }
     pixelsFilled += WIDTH * HEIGHT;
 }
@@ -702,15 +756,28 @@ function init() {
             0, 0, 0,
 
             0xFF0000FF,
-            0xFF0000FF,
-            0xFF0000FF
+            0x00FF00FF,
+            0x0000FFFF
         )
     );
 
     renderTris = new Array(4);
+
+    globalTranslateX = 128.9385;
+    globalTranslateY = 106.1405;
+    globalTranslateZ = -64.77825;
+    globalRotateX = 31;
+
+    for (let i = 0 ; i < zBufferAlwaysBlank.length; i++) {
+        zBufferAlwaysBlank[i] = Z_BUFFER_CLEAR_VAL;
+    }
 }
 
+let lastTime = 0;
+
 function frame(time: DOMHighResTimeStamp) {
+    let deltaTime = time - lastTime;
+    lastTime = time;
     // let ratio = (Math.sin(time / 1000) + 1) / 2;
     // let x = lerp(0, 400, ratio);
 
@@ -759,12 +826,21 @@ function frame(time: DOMHighResTimeStamp) {
     // let speedMul = 0.5;
     // // let rad = time / (Math.PI * 2 * 79.57741211 / speedMul);
 
+    let moveBy = deltaTime / 4;
+    if (up) globalTranslateY += moveBy;
+    if (down) globalTranslateY -= moveBy;
+    if (forward) globalTranslateZ += moveBy;
+    if (backward) globalTranslateZ -= moveBy;
+    if (left) globalTranslateX += moveBy;
+    if (right) globalTranslateX -= moveBy;
 
+    globalRotateY += moveBy / 40;
 
     // let triangle0Z = Math.sin(time / (100000 * 10)) * 50;
     tris[0].verticesZ[0] = triangle0Z;
     tris[0].verticesZ[1] = triangle0Z;
     tris[0].verticesZ[2] = triangle0Z;
+    tris[0].material = 12345;
 
     // let rad = toRadians(parseInt((document.getElementById("slider")! as HTMLInputElement).value)) / (Math.PI * 2);
     // let sin = Math.sin(rad);
@@ -782,15 +858,16 @@ function frame(time: DOMHighResTimeStamp) {
     // Pixels filled: ${pixelsFilled}`
     // );
 
+    clear();
+
     processTransformations();
     rasterize();
     if (ssao) postProcess();
 
-    // drawDots();
+    if (vertexDots) drawDots();
     drawCrosshair();
 
     display();
-    clear();
 
     frameCount++;
 
@@ -810,36 +887,58 @@ function frame(time: DOMHighResTimeStamp) {
     pixelsFilled = 0;
 }
 
+
 let x = 0;
 let x2 = 0;
 function processTransformations() {
     renderTrisCount = 0;
+    triLoop:
     for (let i = 0; i < tris.length; i++) {
-        if (renderTris[i] == null) {
-            renderTris[i] = new Triangle();
+        if (renderTris[renderTrisCount] == null) {
+            renderTris[renderTrisCount] = new Triangle();
         }
         let preTri = tris[i];
 
-        let renderTri = renderTris[i];
+        let renderTri = renderTris[renderTrisCount];
         for (let j = 0; j < 3; j++) {
-            let centeredX = (preTri.verticesX[j] + globalTranslateX) - HALF_WIDTH;
-            let centeredY = (preTri.verticesY[j] + globalTranslateY) - HALF_HEIGHT;
-            let z = preTri.verticesZ[j] - globalTranslateZ;
+            renderTri.verticesX[j] = preTri.verticesX[j];
+            renderTri.verticesY[j] = preTri.verticesY[j];
+            renderTri.verticesZ[j] = preTri.verticesZ[j];
+            renderTri.colors[j] = preTri.colors[j];
+        }
+        renderTri.material = preTri.material;
+
+        if (rotate) {
+            let sin = Math.sin(toRadians(globalRotateY));
+            let cos = Math.cos(toRadians(globalRotateY));
+            rotateTriXz(renderTris[renderTrisCount], 0, 0, sin, cos);
+
+            sin = Math.sin(toRadians(globalRotateX));
+            cos = Math.cos(toRadians(globalRotateX));
+            rotateTriYz(renderTris[renderTrisCount], 0, 0, sin, cos);
+
+            sin = Math.sin(toRadians(globalRotateZ));
+            cos = Math.cos(toRadians(globalRotateZ));
+            rotateTriXy(renderTris[renderTrisCount], HALF_WIDTH, HALF_HEIGHT, sin, cos);
+        }
+
+        for (let j = 0; j < 3; j++) {
+            let centeredX = (renderTri.verticesX[j] + globalTranslateX) - HALF_WIDTH;
+            let centeredY = (renderTri.verticesY[j] + globalTranslateY) - HALF_HEIGHT;
+            let z = renderTri.verticesZ[j] - globalTranslateZ;
+            
+            // Don't render tri if Z is too small (cheap clipping)
+            if (z <= 0) {
+                continue triLoop;
+            }
+
             if (perspectiveTransform) {
-                renderTri.verticesX[j] = (centeredX / ((z / 100) + 1)) + HALF_WIDTH;
-                renderTri.verticesY[j] = (centeredY / ((z / 100) + 1)) + HALF_HEIGHT;
+                renderTri.verticesX[j] = (centeredX / ((z / 100))) + HALF_WIDTH;
+                renderTri.verticesY[j] = (centeredY / ((z / 100))) + HALF_HEIGHT;
             } else {
                 renderTri.verticesX[j] = centeredX + HALF_WIDTH;
                 renderTri.verticesY[j] = centeredY + HALF_HEIGHT;
             }
-            renderTri.verticesZ[j] = (preTri.verticesZ[j] / ((z / 100) + 1));
-            renderTri.colors[j] = preTri.colors[j];
-        }
-
-        if (rotate) {
-            let sin = Math.sin(x);
-            let cos = Math.cos(x);
-            rotateTri2d(renderTris[i], HALF_WIDTH, HALF_HEIGHT, sin, cos);
         }
 
         renderTrisCount++;
@@ -893,18 +992,43 @@ function bounds(bMin: number, bMax: number, val: number): number {
     return max(bMin, min(bMax, val));
 }
 
-function transformTri2d(tri: Triangle, originX: number, originY: number, m0: number, m1: number, m2: number, m3: number) {
+function transformTriXy(tri: Triangle, originX: number, originY: number, m0: number, m1: number, m2: number, m3: number) {
     for (let i = 0; i < 3; i++) {
         let origX = tri.verticesX[i];
         let origY = tri.verticesY[i];
-        // Apply 2x2 matrix multiplication
         tri.verticesX[i] = originX + ((origX - originX) * m0 + (origY - originY) * m1);
         tri.verticesY[i] = originY + ((origX - originX) * m2 + (origY - originY) * m3);
     }
 }
 
-function rotateTri2d(tri: Triangle, originX: number, originY: number, sin: number, cos: number) {
-    transformTri2d(tri, originX, originY, cos, -sin, sin, cos);
+function transformTriXz(tri: Triangle, originX: number, originZ: number, m0: number, m1: number, m2: number, m3: number) {
+    for (let i = 0; i < 3; i++) {
+        let origX = tri.verticesX[i];
+        let origZ = tri.verticesZ[i];
+        tri.verticesX[i] = originX + ((origX - originX) * m0 + (origZ - originZ) * m1);
+        tri.verticesZ[i] = originZ + ((origX - originX) * m2 + (origZ - originZ) * m3);
+    }
+}
+
+function transformTriYz(tri: Triangle, originY: number, originZ: number, m0: number, m1: number, m2: number, m3: number) {
+    for (let i = 0; i < 3; i++) {
+        let origY = tri.verticesY[i];
+        let origZ = tri.verticesZ[i];
+        tri.verticesY[i] = originY + ((origY - originY) * m0 + (origZ - originZ) * m1);
+        tri.verticesZ[i] = originZ + ((origY - originY) * m2 + (origZ - originZ) * m3);
+    }
+}
+
+function rotateTriXy(tri: Triangle, originX: number, originY: number, sin: number, cos: number) {
+    transformTriXy(tri, originX, originY, cos, -sin, sin, cos);
+}
+
+function rotateTriXz(tri: Triangle, originX: number, originZ: number, sin: number, cos: number) {
+    transformTriXz(tri, originX, originZ, cos, -sin, sin, cos);
+}
+
+function rotateTriYz(tri: Triangle, originY: number, originZ: number, sin: number, cos: number) {
+    transformTriYz(tri, originY, originZ, cos, -sin, sin, cos);
 }
 
 function toDegrees(radians: number) {
@@ -912,7 +1036,7 @@ function toDegrees(radians: number) {
 }
 
 function toRadians(deg: number) {
-    return deg / (Math.PI * 2);
+    return deg * (Math.PI / 180);
 }
 
 function matrixTruncater(num: number): string {
@@ -1017,6 +1141,10 @@ function parseObjFile(objFile: string) {
     let texCoordArr: Vec2[] = [];
     let normalArr: Vec3[] = [];
 
+    let color = 0xFFFFFFFF;
+    let colorIndex = 0;
+    let materialId = 1;
+
     while (lineIndex < splitObjFile.length) {
         let line = splitObjFile[lineIndex++];
         let splitLine = line.split(" ");
@@ -1024,6 +1152,17 @@ function parseObjFile(objFile: string) {
         let splitLineIndex = 0;
 
         let prefix = splitLine[splitLineIndex++];
+
+        if (prefix == "usemtl") {
+            switch (colorIndex % 3) {
+                case 0: color = 0xFF0000FF; break;
+                case 1: color = 0x00FF00FF; break;
+                case 2: color = 0x0000FFFF; break;
+            }
+
+            colorIndex++;
+            materialId++;
+        }
 
         if (prefix == "v") {
             let x = parseDec(splitLine[splitLineIndex++]);
@@ -1046,21 +1185,19 @@ function parseObjFile(objFile: string) {
                 refs[2] = vArray[i + 1];
 
                 let tri = new Triangle();
-                let color = 0x000000FF;
-                switch (triangleArr.length % 3) {
-                    case 0: color = 0xFF0000FF; break;
-                    case 1: color = 0x00FF00FF; break;
-                    case 2: color = 0x0000FFFF; break;
-                }
-                color = 0x7F7F7FFF;
+
+                // console.log(materialId);
+
                 color = 0xFFFFFFFF;
+
                 tri.colors[0] = color;
                 tri.colors[1] = color;
                 tri.colors[2] = color;
+                tri.material = materialId;
                 triangleArr.push(tri);
                 for (let j = 0; j < 3; j++) {
-                    tri.verticesX[j] = positionArr[refs[j]].x;
-                    tri.verticesY[j] = positionArr[refs[j]].y;
+                    tri.verticesX[j] = -positionArr[refs[j]].x;
+                    tri.verticesY[j] = -positionArr[refs[j]].y;
                     tri.verticesZ[j] = positionArr[refs[j]].z;
                 }
             }
