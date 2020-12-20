@@ -12,30 +12,95 @@ let crossY = 0;
 
 let triangle0Z = 0;
 
-let up = false;
-let down = false;
-let forward = false;
-let backward = false;
-let left = false;
-let right = false;
+let lookUp = false;
+let lookLeft = false;
+let lookDown = false;
+let lookRight = false;
+
+let moveUp = false;
+let moveDown = false;
+let moveForward = false;
+let moveBackward = false;
+let moveLeft = false;
+let moveRight = false;
+
+let pointerCaptured = false;
 
 window.onload = () => {
+    let infoElement = document.getElementById("info")!;
+    let canvasElement = document.getElementById("canvas")!;
+
+    canvasElement.onclick = (evt) => {
+        let x = crossX - globalTranslateX - HALF_WIDTH;
+        let y = crossY - globalTranslateY - HALF_HEIGHT;
+        tris[0].verticesX[crossVertIndex] = x + HALF_WIDTH;
+        tris[0].verticesY[crossVertIndex] = y + HALF_HEIGHT;
+
+        // tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
+        // tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
+
+        crossVertIndex++;
+
+        if (crossVertIndex >= 3) {
+            crossVertIndex = 0;
+        }
+    };
+
+    document.onpointerlockchange = () => {
+        pointerCaptured = document.pointerLockElement == canvasElement;
+    };
+
+    canvasElement.style.cursor = "none";
+    canvasElement.onmousemove = (evt) => {
+        if (pointerCaptured) {
+            globalRotateY += evt.movementX * 0.25;
+            globalRotateX += evt.movementY * 0.25;
+
+            globalRotateY %= 360;
+            globalRotateX = bounds(-90, 90, globalRotateX);
+        } else {
+            let ratio = canvasElement.clientWidth / WIDTH;
+
+            let rect = canvasElement.getBoundingClientRect();
+
+            crossX = ((evt.clientX - rect.left) / ratio) | 0;
+            crossY = ((evt.clientY - rect.top) / ratio) | 0;
+
+            infoElement.innerText = `
+            Pos X: ${crossX}
+            Pos Y: ${crossY}
+    
+            Set Vertex ${crossVertIndex}
+            `;
+        }
+    };
+
     function keyEvent(key: string, val: boolean) {
         switch (key) {
-            case "Space": up = val; break;
-            case "ShiftLeft": down = val; break;
-            case "KeyW": forward = val; break;
-            case "KeyS": backward = val; break;
-            case "KeyA": left = val; break;
-            case "KeyD": right = val; break;
+            case "Space": moveUp = val; break;
+            case "ShiftLeft": moveDown = val; break;
+            case "KeyW": moveForward = val; break;
+            case "KeyS": moveBackward = val; break;
+            case "KeyA": moveLeft = val; break;
+            case "KeyD": moveRight = val; break;
+            case "ArrowLeft": lookLeft = val; break;
+            case "ArrowRight": lookRight = val; break;
+            case "ArrowUp": lookUp = val; break;
+            case "ArrowDown": lookDown = val; break;
         }
     }
 
-    let block = ["Space", "ShiftLeft", "KeyW", "KeyS", "KeyA", "KeyD"];
+    let block = ["Space", "ShiftLeft", "KeyW", "KeyS", "KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter"];
 
     document.onkeydown = function (e) {
         if (block.includes(e.key)) {
             e.preventDefault();
+        }
+
+        switch (e.code) {
+            case "Enter":
+                canvasElement.requestPointerLock();
+                break;
         }
 
         keyEvent(e.code, true);
@@ -84,42 +149,6 @@ window.onload = () => {
         console.log("Couldn't load canvas");
     }
 
-    let infoElement = document.getElementById("info")!;
-    let canvasElement = document.getElementById("canvas")!;
-
-    canvasElement.onclick = (evt) => {
-        let x = crossX - globalTranslateX - HALF_WIDTH;
-        let y = crossY - globalTranslateY - HALF_HEIGHT;
-        tris[0].verticesX[crossVertIndex] = x + HALF_WIDTH;
-        tris[0].verticesY[crossVertIndex] = y + HALF_HEIGHT;
-
-        // tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
-        // tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
-
-        crossVertIndex++;
-
-        if (crossVertIndex >= 3) {
-            crossVertIndex = 0;
-        }
-    };
-
-    canvasElement.style.cursor = "none";
-    canvasElement.onmousemove = (evt) => {
-        infoElement.innerText = `
-        Pos X: ${crossX}
-        Pos Y: ${crossY}
-
-        Set Vertex ${crossVertIndex}
-        `;
-
-        let ratio = canvasElement.clientWidth / WIDTH;
-
-        let rect = canvasElement.getBoundingClientRect();
-
-        crossX = ((evt.clientX - rect.left) / ratio) | 0;
-        crossY = ((evt.clientY - rect.top) / ratio) | 0;
-    };
-
     document.getElementById("rotate")!.onclick = e => { rotate = (e as any).target.checked; };
     document.getElementById("fill")!.onclick = e => { fill = (e as any).target.checked; };
     document.getElementById("wireframe")!.onclick = e => { wireframe = (e as any).target.checked; };
@@ -133,6 +162,7 @@ window.onload = () => {
     document.getElementById("z-slider")!.oninput = e => { globalTranslateZ = parseInt((e as any).target.value); };
     document.getElementById("x-rotation")!.oninput = e => { globalRotateX = parseInt((e as any).target.value); };
     document.getElementById("y-rotation")!.oninput = e => { globalRotateY = parseInt((e as any).target.value); };
+    document.getElementById("z-rotation")!.oninput = e => { globalRotateZ = parseInt((e as any).target.value); };
     document.getElementById("vertex-dots")!.onclick = e => { vertexDots = (e as any).target.checked; };
 
     rotate = (document.getElementById("rotate") as any).checked;
@@ -157,12 +187,75 @@ function debug(msg: any) {
     debugElement.innerText = msg;
 }
 
+class Vec3 {
+    x: number;
+    y: number;
+    z: number;
+
+    constructor(x: number = 0, y: number = 0, z: number = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    set(x: number, y: number, z: number) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+}
+
+class ObjVertexRef {
+    v: number;
+    vt: number;
+    vn: number;
+
+    constructor(v: number, vt: number, vn: number) {
+        this.v = v;
+        this.vt = vt;
+        this.vn = vn;
+    }
+}
+
+class ObjVertex {
+    position: Vec3;
+    texCoord: Vec2;
+    normal: Vec3;
+
+    constructor(position: Vec3, texCoord: Vec2, normal: Vec3) {
+        this.position = position;
+        this.texCoord = texCoord;
+        this.normal = normal;
+    }
+}
+
+class ObjFile {
+    positionArr: Vec3[];
+    texCoordArr: Vec2[];
+    normalArr: Vec3[];
+
+    constructor(positionArr: Vec3[], texCoordArr: Vec2[], normalArr: Vec3[]) {
+        this.positionArr = positionArr;
+        this.texCoordArr = texCoordArr;
+        this.normalArr = normalArr;
+    }
+}
+
 class VertexData {
     x: number = 0;
     y: number = 0;
     z: number = 0;
 
     color: number = 0;
+}
+
+function crossProduct(in0: Vec3, in1: Vec3, out: Vec3) {
+    let x = in0.y * in1.z - in0.z * in1.y;
+    let y = in0.z * in1.x - in0.x * in1.z;
+    let z = in0.x * in1.y - in0.y * in1.x;
+    out.x = x;
+    out.y = y;
+    out.z = z;
 }
 
 class Triangle {
@@ -239,6 +332,25 @@ class Triangle {
     }
 }
 
+let tmpVec0 = new Vec3();
+let tmpVec1 = new Vec3();
+function vectorOfTriangle(tri: Triangle, vec: Vec3) {
+    tmpVec0.x = tri.verticesX[0] - tri.verticesX[1];
+    tmpVec0.y = tri.verticesY[0] - tri.verticesY[1];
+    tmpVec0.z = tri.verticesZ[0] - tri.verticesZ[1];
+    tmpVec1.x = tri.verticesX[0] - tri.verticesX[2];
+    tmpVec1.y = tri.verticesY[0] - tri.verticesY[2];
+    tmpVec1.z = tri.verticesZ[0] - tri.verticesZ[2];
+    crossProduct(tmpVec0, tmpVec1, vec);
+}
+
+function normalizeVector(vec: Vec3) {
+    let length = Math.sqrt(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
+    vec.x /= length;
+    vec.y /= length;
+    vec.z /= length;
+}
+
 let tris: Array<Triangle>;
 let renderTris: Array<Triangle>;
 let renderTrisCount = 0;
@@ -281,6 +393,9 @@ let depthTest = true;
 let lowZ = 0;
 let highZ = 0;
 
+let tmpVec = new Vec3();
+let upVec = new Vec3(0, 1, 0);
+
 function rasterize() {
     lowZ = 0;
     highZ = 0;
@@ -290,6 +405,11 @@ function rasterize() {
     if (fill) {
         for (let t = 0; t < renderTrisCount; t++) {
             let tri = renderTris[t];
+
+            vectorOfTriangle(tri, tmpVec);
+            normalizeVector(tmpVec);
+            crossProduct(tmpVec, upVec, tmpVec);
+            let ratio = 0.25 + abs(tmpVec.x) * 0.75;
 
             let materialId = tri.material;
 
@@ -397,12 +517,12 @@ function rasterize() {
                     leftEdgeZLerped = tmpZ;
                 }
 
-                c00 = (leftEdgeColorLerped >> 24) & 0xFF;
-                c01 = (leftEdgeColorLerped >> 16) & 0xFF;
-                c02 = (leftEdgeColorLerped >> 8) & 0xFF;
-                c10 = (rightEdgeColorLerped >> 24) & 0xFF;
-                c11 = (rightEdgeColorLerped >> 16) & 0xFF;
-                c12 = (rightEdgeColorLerped >> 8) & 0xFF;
+                c00 = (((leftEdgeColorLerped >> 24) & 0xFF) * ratio) | 0;
+                c01 = (((leftEdgeColorLerped >> 16) & 0xFF) * ratio) | 0;
+                c02 = (((leftEdgeColorLerped >> 8) & 0xFF) * ratio) | 0;
+                c10 = (((rightEdgeColorLerped >> 24) & 0xFF) * ratio) | 0;
+                c11 = (((rightEdgeColorLerped >> 16) & 0xFF) * ratio) | 0;
+                c12 = (((rightEdgeColorLerped >> 8) & 0xFF) * ratio) | 0;
 
                 let lineLengthNoClip = (rightEdgeLerped | 0) - (leftEdgeLerped | 0);
 
@@ -768,10 +888,19 @@ function init() {
     globalTranslateZ = -64.77825;
     globalRotateX = 31;
 
-    for (let i = 0 ; i < zBufferAlwaysBlank.length; i++) {
+    for (let i = 0; i < zBufferAlwaysBlank.length; i++) {
         zBufferAlwaysBlank[i] = Z_BUFFER_CLEAR_VAL;
     }
 }
+
+let sinY = 0;
+let cosY = 0;
+let sinX = 0;
+let cosX = 0;
+let sinZ = 0;
+let cosZ = 0;
+
+let movementVector = new Vec3();
 
 let lastTime = 0;
 
@@ -826,15 +955,37 @@ function frame(time: DOMHighResTimeStamp) {
     // let speedMul = 0.5;
     // // let rad = time / (Math.PI * 2 * 79.57741211 / speedMul);
 
-    let moveBy = deltaTime / 4;
-    if (up) globalTranslateY += moveBy;
-    if (down) globalTranslateY -= moveBy;
-    if (forward) globalTranslateZ += moveBy;
-    if (backward) globalTranslateZ -= moveBy;
-    if (left) globalTranslateX += moveBy;
-    if (right) globalTranslateX -= moveBy;
+    sinY = Math.sin(toRadians(globalRotateY));
+    cosY = Math.cos(toRadians(globalRotateY));
+    sinX = Math.sin(toRadians(globalRotateX));
+    cosX = Math.cos(toRadians(globalRotateX));
+    sinZ = Math.sin(toRadians(globalRotateZ));
+    cosZ = Math.cos(toRadians(globalRotateZ));
 
-    globalRotateY += moveBy / 40;
+    movementVector.set(0, 0, 0);
+
+    let moveBy = deltaTime / 16;
+    if (moveUp) globalTranslateY += moveBy;
+    if (moveDown) globalTranslateY -= moveBy;
+    if (moveForward) movementVector.z += moveBy;
+    if (moveBackward) movementVector.z -= moveBy;
+    if (moveLeft) movementVector.x += moveBy;
+    if (moveRight) movementVector.x -= moveBy;
+
+    rotateVecXz(movementVector, sinY, cosY);
+    rotateVecYz(movementVector, sinX, cosX);
+    rotateVecXy(movementVector, sinZ, cosZ);
+
+    globalTranslateZ += movementVector.z;
+    globalTranslateX += movementVector.x;
+
+    moveBy = deltaTime / 8;
+    if (lookLeft) globalRotateY -= moveBy;
+    if (lookRight) globalRotateY += moveBy;
+    if (lookDown) globalRotateX += moveBy;
+    if (lookUp) globalRotateX -= moveBy;
+
+    // globalRotateY += moveBy / 40;
 
     // let triangle0Z = Math.sin(time / (100000 * 10)) * 50;
     tris[0].verticesZ[0] = triangle0Z;
@@ -865,7 +1016,7 @@ function frame(time: DOMHighResTimeStamp) {
     if (ssao) postProcess();
 
     if (vertexDots) drawDots();
-    drawCrosshair();
+    if (!pointerCaptured) drawCrosshair();
 
     display();
 
@@ -891,6 +1042,13 @@ function frame(time: DOMHighResTimeStamp) {
 let x = 0;
 let x2 = 0;
 function processTransformations() {
+    upVec.x = 0;
+    upVec.y = 1;
+    upVec.z = 0;
+    rotateVecXz(upVec, -sinY, -cosY);
+    rotateVecYz(upVec, -sinX, -cosX);
+    rotateVecXy(upVec, -sinZ, -cosZ);
+
     renderTrisCount = 0;
     triLoop:
     for (let i = 0; i < tris.length; i++) {
@@ -909,24 +1067,15 @@ function processTransformations() {
         renderTri.material = preTri.material;
 
         if (rotate) {
-            let sin = Math.sin(toRadians(globalRotateY));
-            let cos = Math.cos(toRadians(globalRotateY));
-            rotateTriXz(renderTris[renderTrisCount], 0, 0, sin, cos);
-
-            sin = Math.sin(toRadians(globalRotateX));
-            cos = Math.cos(toRadians(globalRotateX));
-            rotateTriYz(renderTris[renderTrisCount], 0, 0, sin, cos);
-
-            sin = Math.sin(toRadians(globalRotateZ));
-            cos = Math.cos(toRadians(globalRotateZ));
-            rotateTriXy(renderTris[renderTrisCount], HALF_WIDTH, HALF_HEIGHT, sin, cos);
+            rotateTriXz(renderTris[renderTrisCount], HALF_WIDTH - globalTranslateX, globalTranslateZ, sinY, cosY);
+            rotateTriYz(renderTris[renderTrisCount], HALF_HEIGHT - globalTranslateY, globalTranslateZ, sinX, cosX);
         }
 
         for (let j = 0; j < 3; j++) {
-            let centeredX = (renderTri.verticesX[j] + globalTranslateX) - HALF_WIDTH;
-            let centeredY = (renderTri.verticesY[j] + globalTranslateY) - HALF_HEIGHT;
+            let centeredX = renderTri.verticesX[j] + globalTranslateX - HALF_WIDTH;
+            let centeredY = renderTri.verticesY[j] + globalTranslateY - HALF_HEIGHT;
             let z = renderTri.verticesZ[j] - globalTranslateZ;
-            
+
             // Don't render tri if Z is too small (cheap clipping)
             if (z <= 0) {
                 continue triLoop;
@@ -939,6 +1088,10 @@ function processTransformations() {
                 renderTri.verticesX[j] = centeredX + HALF_WIDTH;
                 renderTri.verticesY[j] = centeredY + HALF_HEIGHT;
             }
+        }
+
+        if (rotate) {
+            rotateTriXy(renderTris[renderTrisCount], HALF_WIDTH, HALF_HEIGHT, sinZ, cosZ);
         }
 
         renderTrisCount++;
@@ -1031,6 +1184,39 @@ function rotateTriYz(tri: Triangle, originY: number, originZ: number, sin: numbe
     transformTriYz(tri, originY, originZ, cos, -sin, sin, cos);
 }
 
+function transformVecXy(vec: Vec3, m0: number, m1: number, m2: number, m3: number) {
+    let origX = vec.x;
+    let origY = vec.y;
+    vec.x = origX * m0 + origY * m1;
+    vec.y = origX * m2 + origY * m3;
+}
+
+function transformVecXz(vec: Vec3, m0: number, m1: number, m2: number, m3: number) {
+    let origX = vec.x;
+    let origZ = vec.z;
+    vec.x = origX * m0 + origZ * m1;
+    vec.z = origX * m2 + origZ * m3;
+}
+
+function transformVecYz(vec: Vec3, m0: number, m1: number, m2: number, m3: number) {
+    let origY = vec.y;
+    let origZ = vec.z;
+    vec.y = origY * m0 + origZ * m1;
+    vec.z = origY * m2 + origZ * m3;
+}
+
+function rotateVecXy(vec: Vec3, sin: number, cos: number) {
+    transformVecXy(vec, cos, -sin, sin, cos);
+}
+
+function rotateVecXz(vec: Vec3, sin: number, cos: number) {
+    transformVecXz(vec, cos, -sin, sin, cos);
+}
+
+function rotateVecYz(vec: Vec3, sin: number, cos: number) {
+    transformVecYz(vec, cos, -sin, sin, cos);
+}
+
 function toDegrees(radians: number) {
     return radians * (180 / Math.PI);
 }
@@ -1077,54 +1263,6 @@ class Vec2 {
     constructor(x: number, y: number) {
         this.x = x;
         this.y = y;
-    }
-}
-
-class Vec3 {
-    x: number;
-    y: number;
-    z: number;
-
-    constructor(x: number, y: number, z: number) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-}
-
-class ObjVertexRef {
-    v: number;
-    vt: number;
-    vn: number;
-
-    constructor(v: number, vt: number, vn: number) {
-        this.v = v;
-        this.vt = vt;
-        this.vn = vn;
-    }
-}
-
-class ObjVertex {
-    position: Vec3;
-    texCoord: Vec2;
-    normal: Vec3;
-
-    constructor(position: Vec3, texCoord: Vec2, normal: Vec3) {
-        this.position = position;
-        this.texCoord = texCoord;
-        this.normal = normal;
-    }
-}
-
-class ObjFile {
-    positionArr: Vec3[];
-    texCoordArr: Vec2[];
-    normalArr: Vec3[];
-
-    constructor(positionArr: Vec3[], texCoordArr: Vec2[], normalArr: Vec3[]) {
-        this.positionArr = positionArr;
-        this.texCoordArr = texCoordArr;
-        this.normalArr = normalArr;
     }
 }
 
