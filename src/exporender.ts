@@ -3,6 +3,8 @@ interface Window {
     ctx: CanvasRenderingContext2D;
 }
 
+const NEAR_CLIPPING_PLANE = 0;
+
 let crossVertIndex = 0;
 let frameCount = 0;
 let frameTimeCounterNext = 0;
@@ -11,6 +13,9 @@ let crossX = 0;
 let crossY = 0;
 
 let triangle0Z = 0;
+
+let zDivisor = 150;
+let flySpeedMul = 1;
 
 let lookUp = false;
 let lookLeft = false;
@@ -24,6 +29,12 @@ let moveBackward = false;
 let moveLeft = false;
 let moveRight = false;
 
+let objXFlip = false;
+let objYFlip = false;
+let objZFlip = false;
+
+let shiftLeft = false;
+
 let pointerCaptured = false;
 
 window.onload = () => {
@@ -31,24 +42,34 @@ window.onload = () => {
     let canvasElement = document.getElementById("canvas")!;
 
     canvasElement.onclick = (evt) => {
-        let x = crossX - globalTranslateX - HALF_WIDTH;
-        let y = crossY - globalTranslateY - HALF_HEIGHT;
-        tris[0].verticesX[crossVertIndex] = x + HALF_WIDTH;
-        tris[0].verticesY[crossVertIndex] = y + HALF_HEIGHT;
+        if (!pointerCaptured) {
+            let x = crossX - globalTranslateX - HALF_WIDTH;
+            let y = crossY - globalTranslateY - HALF_HEIGHT;
+            tris[0].verticesX[crossVertIndex] = x + HALF_WIDTH;
+            tris[0].verticesY[crossVertIndex] = y + HALF_HEIGHT;
 
-        // tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
-        // tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
+            // tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
+            // tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
 
-        crossVertIndex++;
+            crossVertIndex++;
 
-        if (crossVertIndex >= 3) {
-            crossVertIndex = 0;
+            if (crossVertIndex >= 3) {
+                crossVertIndex = 0;
+            }
         }
     };
 
     document.onpointerlockchange = () => {
         pointerCaptured = document.pointerLockElement == canvasElement;
     };
+
+    document.addEventListener("wheel", e => {
+        if (pointerCaptured) {
+            flySpeedMul += -e.deltaY / 250;
+            flySpeedMul = bounds(0, 10, flySpeedMul);
+            e.preventDefault();
+        }
+    }, { passive: false });
 
     canvasElement.style.cursor = "none";
     canvasElement.onmousemove = (evt) => {
@@ -77,8 +98,8 @@ window.onload = () => {
 
     function keyEvent(key: string, val: boolean) {
         switch (key) {
-            case "Space": moveUp = val; break;
-            case "ShiftLeft": moveDown = val; break;
+            case "KeyE": moveUp = val; break;
+            case "KeyQ": moveDown = val; break;
             case "KeyW": moveForward = val; break;
             case "KeyS": moveBackward = val; break;
             case "KeyA": moveLeft = val; break;
@@ -87,10 +108,11 @@ window.onload = () => {
             case "ArrowRight": lookRight = val; break;
             case "ArrowUp": lookUp = val; break;
             case "ArrowDown": lookDown = val; break;
+            case "ShiftLeft": shiftLeft = val; break;
         }
     }
 
-    let block = ["Space", "ShiftLeft", "KeyW", "KeyS", "KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter"];
+    let block = ["KeyQ", "KeyE", "KeyW", "KeyS", "KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "ShiftLeft", "Backquote"];
 
     document.onkeydown = function (e) {
         if (block.includes(e.key)) {
@@ -98,8 +120,10 @@ window.onload = () => {
         }
 
         switch (e.code) {
-            case "Enter":
-                canvasElement.requestPointerLock();
+            case "Backquote":
+                if (shiftLeft) {
+                    canvasElement.requestPointerLock();
+                }
                 break;
         }
 
@@ -164,6 +188,9 @@ window.onload = () => {
     document.getElementById("y-rotation")!.oninput = e => { globalRotateY = parseInt((e as any).target.value); };
     document.getElementById("z-rotation")!.oninput = e => { globalRotateZ = parseInt((e as any).target.value); };
     document.getElementById("vertex-dots")!.onclick = e => { vertexDots = (e as any).target.checked; };
+    document.getElementById("obj-x-flip")!.onclick = e => { objXFlip = (e as any).target.checked; };
+    document.getElementById("obj-y-flip")!.onclick = e => { objYFlip = (e as any).target.checked; };
+    document.getElementById("obj-z-flip")!.onclick = e => { objZFlip = (e as any).target.checked; };
 
     rotate = (document.getElementById("rotate") as any).checked;
     fill = (document.getElementById("fill") as any).checked;
@@ -355,8 +382,8 @@ let tris: Array<Triangle>;
 let renderTris: Array<Triangle>;
 let renderTrisCount = 0;
 
-const WIDTH = 256;
-const HEIGHT = 192;
+const WIDTH = 240;
+const HEIGHT = 160;
 const HALF_WIDTH = WIDTH / 2;
 const HALF_HEIGHT = HEIGHT / 2;
 const BYTES_PER_PIXEL = 4;
@@ -565,13 +592,7 @@ function rasterize() {
 
                 if (!renderZ) {
                     for (let p = 0; p < lineLength; p++) {
-                        z += zPerPixel;
-
-                        if (z < activeZBuffer[zBase]) {
-                            c0 += c0PerPixel;
-                            c1 += c1PerPixel;
-                            c2 += c2PerPixel;
-
+                        if (z > NEAR_CLIPPING_PLANE && z < activeZBuffer[zBase]) {
                             buffer.data[base + 0] = c0; /* R */;
                             buffer.data[base + 1] = c1; /* G */;
                             buffer.data[base + 2] = c2; /* B */;
@@ -580,14 +601,17 @@ function rasterize() {
                             gBuffer[zBase] = materialId;
                         }
 
+                        z += zPerPixel;
+                        c0 += c0PerPixel;
+                        c1 += c1PerPixel;
+                        c2 += c2PerPixel;
+
                         base += 4;
                         zBase += 1;
                     }
                 } else {
                     for (let p = 0; p < lineLength; p++) {
-                        z += zPerPixel;
-
-                        if (z < activeZBuffer[zBase]) {
+                        if (z > NEAR_CLIPPING_PLANE && z < activeZBuffer[zBase]) {
                             let renderZ = z;
                             if (renderZ < lowZ) lowZ = renderZ;
                             if (renderZ > highZ) highZ = renderZ;
@@ -600,6 +624,8 @@ function rasterize() {
 
                             zBuffer[zBase] = z;
                         }
+
+                        z += zPerPixel;
 
                         base += 4;
                         zBase += 1;
@@ -696,8 +722,6 @@ function postProcess() {
         }
     }
 }
-
-
 
 // Implementation of Bresenham"s line algorithm
 function drawLine(x0: number, y0: number, x1: number, y1: number, color: number) {
@@ -964,7 +988,7 @@ function frame(time: DOMHighResTimeStamp) {
 
     movementVector.set(0, 0, 0);
 
-    let moveBy = deltaTime / 16;
+    let moveBy = (deltaTime / 16) * flySpeedMul;
     if (moveUp) globalTranslateY += moveBy;
     if (moveDown) globalTranslateY -= moveBy;
     if (moveForward) movementVector.z += moveBy;
@@ -973,8 +997,6 @@ function frame(time: DOMHighResTimeStamp) {
     if (moveRight) movementVector.x -= moveBy;
 
     rotateVecXz(movementVector, sinY, cosY);
-    rotateVecYz(movementVector, sinX, cosX);
-    rotateVecXy(movementVector, sinZ, cosZ);
 
     globalTranslateZ += movementVector.z;
     globalTranslateX += movementVector.x;
@@ -1069,32 +1091,38 @@ function processTransformations() {
         if (rotate) {
             rotateTriXz(renderTris[renderTrisCount], HALF_WIDTH - globalTranslateX, globalTranslateZ, sinY, cosY);
             rotateTriYz(renderTris[renderTrisCount], HALF_HEIGHT - globalTranslateY, globalTranslateZ, sinX, cosX);
+            rotateTriXy(renderTris[renderTrisCount], HALF_WIDTH, HALF_HEIGHT, sinZ, cosZ);
         }
+
+        // TODO: Implement frustum culling
+        let xzInsideFrustum = true;
 
         for (let j = 0; j < 3; j++) {
             let centeredX = renderTri.verticesX[j] + globalTranslateX - HALF_WIDTH;
             let centeredY = renderTri.verticesY[j] + globalTranslateY - HALF_HEIGHT;
             let z = renderTri.verticesZ[j] - globalTranslateZ;
 
-            // Don't render tri if Z is too small (cheap clipping)
-            if (z <= 0) {
+            // If vertex behind clipping plane, skip triangle
+            if (z < NEAR_CLIPPING_PLANE) {
                 continue triLoop;
             }
 
+            let finalX;
+            let finalY;
             if (perspectiveTransform) {
-                renderTri.verticesX[j] = (centeredX / ((z / 100))) + HALF_WIDTH;
-                renderTri.verticesY[j] = (centeredY / ((z / 100))) + HALF_HEIGHT;
+                finalX = (centeredX / ((z / zDivisor))) + HALF_WIDTH;
+                finalY = (centeredY / ((z / zDivisor))) + HALF_HEIGHT;
             } else {
-                renderTri.verticesX[j] = centeredX + HALF_WIDTH;
-                renderTri.verticesY[j] = centeredY + HALF_HEIGHT;
+                finalX = centeredX + HALF_WIDTH;
+                finalY = centeredY + HALF_HEIGHT;
             }
+
+            renderTri.verticesX[j] = finalX;
+            renderTri.verticesY[j] = finalY;
+            renderTri.verticesZ[j] = z;
         }
 
-        if (rotate) {
-            rotateTriXy(renderTris[renderTrisCount], HALF_WIDTH, HALF_HEIGHT, sinZ, cosZ);
-        }
-
-        renderTrisCount++;
+        if (xzInsideFrustum) renderTrisCount++;
     }
     x += Math.PI / (144 * 4);
     x2 += Math.PI / (144);
@@ -1334,9 +1362,9 @@ function parseObjFile(objFile: string) {
                 tri.material = materialId;
                 triangleArr.push(tri);
                 for (let j = 0; j < 3; j++) {
-                    tri.verticesX[j] = -positionArr[refs[j]].x;
-                    tri.verticesY[j] = -positionArr[refs[j]].y;
-                    tri.verticesZ[j] = positionArr[refs[j]].z;
+                    tri.verticesX[j] = positionArr[refs[j]].x * (objXFlip ? -1 : 1);
+                    tri.verticesY[j] = positionArr[refs[j]].y * (objYFlip ? -1 : 1);
+                    tri.verticesZ[j] = positionArr[refs[j]].z * (objZFlip ? -1 : 1);
                 }
             }
         }

@@ -9,7 +9,7 @@
 <body>
     <h1>ExpoRender</h1>
     <div id="horizontal">
-        <canvas id="canvas" width="256" height="192"></canvas>
+        <canvas id="canvas" width="240" height="160"></canvas>
         <div id="buttons">
             <div id="settings">
                 <div>Triangle Z<input id="triangle-0-z" type="range" min="-200" max="200" /></div>
@@ -27,12 +27,15 @@
                 <div>Depth Test<input id="depth-test" type="checkbox" checked="true" /></div>
                 <div>Post-processing<input id="ssao" type="checkbox" checked="true" /></div>
                 <div>Vertex Dots<input id="vertex-dots" type="checkbox" /></div>
+                <div>Import OBJ X Flip<input id="obj-x-flip" type="checkbox" /></div>
+                <div>Import OBJ Y Flip<input id="obj-y-flip" type="checkbox" /></div>
+                <div>Import OBJ Z Flip<input id="obj-z-flip" type="checkbox" /></div>
             </div>
 
             <b>
-                <div>Move: WASD</div>
+                <div>Move: WASDQE</div>
                 <div>Look: Arrow Keys</div>
-                <div>Mouse Look: Enter</div>
+                <div>Mouse Look: LShift+Backtick</div>
             </b>
         </div>
     </div>
