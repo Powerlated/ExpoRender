@@ -5,222 +5,6 @@ interface Window {
 
 const NEAR_CLIPPING_PLANE = 0;
 
-let normalShading = false;
-
-let crossVertIndex = 0;
-let frameCount = 0;
-let frameTimeCounterNext = 0;
-
-let crossX = 0;
-let crossY = 0;
-
-let triangle0Z = 0;
-
-let zDivisor = 150;
-let flySpeedMul = 1;
-
-let lookUp = false;
-let lookLeft = false;
-let lookDown = false;
-let lookRight = false;
-
-let moveUp = false;
-let moveDown = false;
-let moveForward = false;
-let moveBackward = false;
-let moveLeft = false;
-let moveRight = false;
-
-let objXFlip = false;
-let objYFlip = false;
-let objZFlip = false;
-
-let normalYFlip = false;
-
-let shiftLeft = false;
-
-let pointerCaptured = false;
-
-window.onload = () => {
-    let infoElement = document.getElementById("info")!;
-    let canvasElement = document.getElementById("canvas")! as HTMLCanvasElement;
-
-    canvasElement.onclick = (evt) => {
-        if (!pointerCaptured) {
-            let x = crossX - cameraTranslateX - HALF_WIDTH;
-            let y = crossY - cameraTranslateY - HALF_HEIGHT;
-            tris[0].verticesX[crossVertIndex] = x + HALF_WIDTH;
-            tris[0].verticesY[crossVertIndex] = y + HALF_HEIGHT;
-
-            // tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
-            // tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
-
-            crossVertIndex++;
-
-            if (crossVertIndex >= 3) {
-                crossVertIndex = 0;
-            }
-        }
-    };
-
-    canvasElement.width = WIDTH;
-    canvasElement.height = HEIGHT;
-    canvasElement.style.width = (WIDTH * SCREEN_SCALE).toString();
-    canvasElement.style.height = (HEIGHT * SCREEN_SCALE).toString();
-
-    document.onpointerlockchange = () => {
-        pointerCaptured = document.pointerLockElement == canvasElement;
-    };
-
-    document.addEventListener("wheel", e => {
-        if (pointerCaptured) {
-            flySpeedMul += -e.deltaY / 250;
-            flySpeedMul = bounds(0, 10, flySpeedMul);
-            e.preventDefault();
-        }
-    }, { passive: false });
-
-    canvasElement.style.cursor = "none";
-    canvasElement.onmousemove = (evt) => {
-        if (pointerCaptured) {
-            cameraRotateY += evt.movementX * 0.25;
-            cameraRotateX += evt.movementY * 0.25;
-
-            cameraRotateY %= 360;
-            cameraRotateX = bounds(-90, 90, cameraRotateX);
-        } else {
-            let ratio = canvasElement.clientWidth / WIDTH;
-
-            let rect = canvasElement.getBoundingClientRect();
-
-            crossX = ((evt.clientX - rect.left) / ratio) | 0;
-            crossY = ((evt.clientY - rect.top) / ratio) | 0;
-
-            infoElement.innerText = `
-            Pos X: ${crossX}
-            Pos Y: ${crossY}
-    
-            Set Vertex ${crossVertIndex}
-            `;
-        }
-    };
-
-    function keyEvent(key: string, val: boolean) {
-        switch (key) {
-            case "KeyE": moveUp = val; break;
-            case "KeyQ": moveDown = val; break;
-            case "KeyW": moveForward = val; break;
-            case "KeyS": moveBackward = val; break;
-            case "KeyA": moveLeft = val; break;
-            case "KeyD": moveRight = val; break;
-            case "ArrowLeft": lookLeft = val; break;
-            case "ArrowRight": lookRight = val; break;
-            case "ArrowUp": lookUp = val; break;
-            case "ArrowDown": lookDown = val; break;
-            case "ShiftLeft": shiftLeft = val; break;
-        }
-    }
-
-    let block = ["KeyQ", "KeyE", "KeyW", "KeyS", "KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "ShiftLeft", "Backquote"];
-
-    document.onkeydown = function (e) {
-        if (block.includes(e.key)) {
-            e.preventDefault();
-        }
-
-        switch (e.code) {
-            case "Backquote":
-                if (shiftLeft) {
-                    canvasElement.requestPointerLock();
-                }
-                break;
-        }
-
-        keyEvent(e.code, true);
-    };
-    document.onkeyup = function (e) {
-        if (block.includes(e.key)) {
-            e.preventDefault();
-        }
-
-        keyEvent(e.code, false);
-    };
-
-    function dropHandler(ev: Event | any) {
-        if (ev.dataTransfer.files[0] instanceof Blob) {
-            console.log("File(s) dropped");
-
-            ev.preventDefault();
-
-            let reader = new FileReader();
-            reader.onload = function () {
-                if (this.result instanceof ArrayBuffer) {
-                    let dec = new TextDecoder("utf-8");
-                    let newTris = parseObjFile(dec.decode(new Uint8Array(this.result)));
-
-                    for (let i = 0; i < newTris.length; i++) {
-                        tris.push(newTris[i]);
-                    }
-                }
-            };
-            reader.readAsArrayBuffer(ev.dataTransfer.files[0]);
-        }
-    }
-
-    function dragoverHandler(ev: Event | any) {
-        ev.preventDefault();
-    }
-
-    window.addEventListener("drop", dropHandler);
-    window.addEventListener("dragover", dragoverHandler);
-
-    window.canvas = document.getElementById("canvas") as HTMLCanvasElement;
-    window.ctx = window.canvas.getContext("2d")!;
-    if (window.canvas) {
-        console.log("Hello ExpoRender!");
-    } else {
-        console.log("Couldn't load canvas");
-    }
-
-    document.getElementById("rotate")!.onclick = e => { rotate = (e as any).target.checked; };
-    document.getElementById("fill")!.onclick = e => { fill = (e as any).target.checked; };
-    document.getElementById("wireframe")!.onclick = e => { wireframe = (e as any).target.checked; };
-    document.getElementById("render-z")!.onclick = e => { renderZ = (e as any).target.checked; };
-    document.getElementById("depth-test")!.onclick = e => { depthTest = (e as any).target.checked; };
-    document.getElementById("ssao")!.onclick = e => { ssao = (e as any).target.checked; };
-    document.getElementById("perspective-transform")!.onclick = e => { perspectiveTransform = (e as any).target.checked; };
-    document.getElementById("normal-shading")!.onclick = e => { normalShading = (e as any).target.checked; };
-    document.getElementById("triangle-0-z")!.oninput = e => { triangle0Z = parseInt((e as any).target.value); };
-    document.getElementById("x-slider")!.oninput = e => { cameraTranslateX = parseInt((e as any).target.value); };
-    document.getElementById("y-slider")!.oninput = e => { cameraTranslateY = parseInt((e as any).target.value); };
-    document.getElementById("z-slider")!.oninput = e => { cameraTranslateZ = parseInt((e as any).target.value); };
-    document.getElementById("x-rotation")!.oninput = e => { globalRotateX = parseInt((e as any).target.value); };
-    document.getElementById("y-rotation")!.oninput = e => { globalRotateY = parseInt((e as any).target.value); };
-    document.getElementById("z-rotation")!.oninput = e => { globalRotateZ = parseInt((e as any).target.value); };
-    document.getElementById("vertex-dots")!.onclick = e => { vertexDots = (e as any).target.checked; };
-    document.getElementById("obj-x-flip")!.onclick = e => { objXFlip = (e as any).target.checked; };
-    document.getElementById("obj-y-flip")!.onclick = e => { objYFlip = (e as any).target.checked; };
-    document.getElementById("obj-z-flip")!.onclick = e => { objZFlip = (e as any).target.checked; };
-    document.getElementById("normal-y-flip")!.onclick = e => { normalYFlip = (e as any).target.checked; };
-
-    rotate = (document.getElementById("rotate") as any).checked;
-    fill = (document.getElementById("fill") as any).checked;
-    wireframe = (document.getElementById("wireframe") as any).checked;
-    renderZ = (document.getElementById("render-z") as any).checked;
-    depthTest = (document.getElementById("depth-test") as any).checked;
-    ssao = (document.getElementById("ssao") as any).checked;
-    perspectiveTransform = (document.getElementById("perspective-transform") as any).checked;
-    normalShading = (document.getElementById("normal-shading") as any).checked;
-    triangle0Z = parseInt((document.getElementById("triangle-0-z") as any).value);
-    cameraTranslateX = parseInt((document.getElementById("x-slider") as any).value);
-    cameraTranslateY = parseInt((document.getElementById("y-slider") as any).value);
-    cameraTranslateZ = parseInt((document.getElementById("z-slider") as any).value);
-
-    init();
-
-    requestAnimationFrame(frameDriver);
-};
-
 function debug(msg: any) {
     let debugElement = document.getElementById("debug")!;
     debugElement.innerText = msg;
@@ -424,10 +208,6 @@ function dotProduct(in0: Vec3, in1: Vec3): number {
     return result;
 }
 
-let tris: Array<Triangle>;
-let renderTris: Array<Triangle>;
-let renderTrisCount = 0;
-
 const RESOLUTION_SCALE = 1;
 const SCREEN_SCALE = 4;
 const WIDTH = 256 * RESOLUTION_SCALE;
@@ -436,540 +216,990 @@ const HALF_WIDTH = WIDTH / 2;
 const HALF_HEIGHT = HEIGHT / 2;
 const BYTES_PER_PIXEL = 4;
 
-let buffer = new ImageData(WIDTH, HEIGHT);
-let zBuffer = new Float64Array(WIDTH * HEIGHT);
-let zBufferAlwaysBlank = new Float64Array(WIDTH * HEIGHT);
-let gBuffer = new Uint32Array(WIDTH * HEIGHT);
-// let clearColor = Uint8Array.of(0x87, 0xCE, 0xEB, 0xFF);
-let clearColor = Uint8Array.of(0, 0, 0, 0xFF);
 const G_BUFFER_CLEAR_VAL = 4294967295;
 const Z_BUFFER_CLEAR_VAL = 0;
 
-let pixelsFilled = 0;
-let linesFilled = 0;
+class ExpoRender {
+    normalShading = false;
 
-let vertexBuf = new Array(3).fill(0).map(() => new VertexData());
+    crossVertIndex = 0;
+    frameCount = 0;
+    frameTimeCounterNext = 0;
 
-let cameraTranslateX = 0;
-let cameraTranslateY = 0;
-let cameraTranslateZ = 0;
-let cameraRotateX = 0;
-let cameraRotateY = 0;
-let cameraRotateZ = 0;
+    crossX = 0;
+    crossY = 0;
 
-let cameraVec = new Vec3();
+    triangle0Z = 0;
 
-let globalRotateX = 0;
-let globalRotateY = 0;
-let globalRotateZ = 0;
+    zDivisor = 150;
+    flySpeedMul = 1;
 
-let ssao = true;
-let vertexDots = false;
-let perspectiveTransform = true;
-let fill = true;
-let rotate = false;
-let wireframe = false;
-let renderZ = false;
-let depthTest = true;
+    lookUp = false;
+    lookLeft = false;
+    lookDown = false;
+    lookRight = false;
 
-let lowZ = 0;
-let highZ = 0;
-let activeLowZ = 0;
-let activeHighZ = 0;
+    moveUp = false;
+    moveDown = false;
+    moveForward = false;
+    moveBackward = false;
+    moveLeft = false;
+    moveRight = false;
 
-let tmpVec = new Vec3();
-let upVec = new Vec3(0, 1, 0);
+    objXFlip = false;
+    objYFlip = false;
+    objZFlip = false;
 
-function rasterize() {
-    activeLowZ = lowZ;
-    activeHighZ = highZ;
+    normalYFlip = false;
+    shiftLeft = false;
+    pointerCaptured = false;
+
+    buffer = new ImageData(WIDTH, HEIGHT);
+    zBuffer = new Float64Array(WIDTH * HEIGHT);
+    zBufferAlwaysBlank = new Float64Array(WIDTH * HEIGHT);
+    gBuffer = new Uint32Array(WIDTH * HEIGHT);
+
+    tris: Array<Triangle> = new Array();
+    renderTris: Array<Triangle> = new Array();
+    renderTrisCount = 0;
+
+    clearColor = Uint8Array.of(0, 0, 0, 0xFF);
+
+    pixelsFilled = 0;
+    linesFilled = 0;
+
+    vertexBuf = new Array(3).fill(0).map(() => new VertexData());
+
+    cameraTranslateX = 0;
+    cameraTranslateY = 0;
+    cameraTranslateZ = 0;
+    cameraRotateX = 0;
+    cameraRotateY = 0;
+    cameraRotateZ = 0;
+
+    cameraVec = new Vec3();
+
+    globalRotateX = 0;
+    globalRotateY = 0;
+    globalRotateZ = 0;
+
+    ssao = true;
+    vertexDots = false;
+    perspectiveTransform = true;
+    fill = true;
+    rotate = false;
+    wireframe = false;
+    renderZ = false;
+    depthTest = true;
+
     lowZ = 0;
     highZ = 0;
+    activeLowZ = 0;
+    activeHighZ = 0;
 
-    let activeZBuffer = depthTest ? zBuffer : zBufferAlwaysBlank;
+    tmpVec = new Vec3();
+    upVec = new Vec3(0, 1, 0);
 
-    if (fill) {
-        triLoop:
-        for (let t = 0; t < renderTrisCount; t++) {
-            let tri = renderTris[t];
-            let materialId = tri.material;
+    load(canvasElement: HTMLCanvasElement, infoElement: HTMLElement) {
+        canvasElement.onclick = (evt) => {
+            if (!this.pointerCaptured) {
+                let x = this.crossX - this.cameraTranslateX - HALF_WIDTH;
+                let y = this.crossY - this.cameraTranslateY - HALF_HEIGHT;
+                this.tris[0].verticesX[this.crossVertIndex] = x + HALF_WIDTH;
+                this.tris[0].verticesY[this.crossVertIndex] = y + HALF_HEIGHT;
 
-            for (let v = 0; v < 3; v++) {
-                // Place vertices into temporary buffers
-                vertexBuf[v].x = tri.verticesX[v];
-                vertexBuf[v].y = tri.verticesY[v];
-                vertexBuf[v].z = tri.verticesZ[v];
-                vertexBuf[v].color = tri.colors[v];
+                // tris[0].verticesX[crossVertIndex] = crossX - globalTranslateX;
+                // tris[0].verticesY[crossVertIndex] = crossY - globalTranslateY;
+
+                this.crossVertIndex++;
+
+                if (this.crossVertIndex >= 3) {
+                    this.crossVertIndex = 0;
+                }
+            }
+        };
+
+        canvasElement.width = WIDTH;
+        canvasElement.height = HEIGHT;
+        canvasElement.style.width = (WIDTH * SCREEN_SCALE).toString();
+        canvasElement.style.height = (HEIGHT * SCREEN_SCALE).toString();
+
+        document.onpointerlockchange = () => {
+            this.pointerCaptured = document.pointerLockElement == canvasElement;
+        };
+
+        document.addEventListener("wheel", e => {
+            if (this.pointerCaptured) {
+                this.flySpeedMul += -e.deltaY / 250;
+                this.flySpeedMul = bounds(0, 10, this.flySpeedMul);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        canvasElement.style.cursor = "none";
+        canvasElement.onmousemove = (evt) => {
+            if (this.pointerCaptured) {
+                this.cameraRotateY += evt.movementX * 0.25;
+                this.cameraRotateX += evt.movementY * 0.25;
+
+                this.cameraRotateY %= 360;
+                this.cameraRotateX = bounds(-90, 90, this.cameraRotateX);
+            } else {
+                let ratio = canvasElement.clientWidth / WIDTH;
+
+                let rect = canvasElement.getBoundingClientRect();
+
+                this.crossX = ((evt.clientX - rect.left) / ratio) | 0;
+                this.crossY = ((evt.clientY - rect.top) / ratio) | 0;
+
+                infoElement.innerText = `
+                Pos X: ${this.crossX}
+                Pos Y: ${this.crossY}
+        
+                Set Vertex ${this.crossVertIndex}
+                `;
+            }
+        };
+
+        let keyEvent = (key: string, val: boolean) => {
+            switch (key) {
+                case "KeyE": this.moveUp = val; break;
+                case "KeyQ": this.moveDown = val; break;
+                case "KeyW": this.moveForward = val; break;
+                case "KeyS": this.moveBackward = val; break;
+                case "KeyA": this.moveLeft = val; break;
+                case "KeyD": this.moveRight = val; break;
+                case "ArrowLeft": this.lookLeft = val; break;
+                case "ArrowRight": this.lookRight = val; break;
+                case "ArrowUp": this.lookUp = val; break;
+                case "ArrowDown": this.lookDown = val; break;
+                case "ShiftLeft": this.shiftLeft = val; break;
+            }
+        };
+
+        let block = ["KeyQ", "KeyE", "KeyW", "KeyS", "KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "ShiftLeft", "Backquote"];
+
+        document.onkeydown = e => {
+            if (block.includes(e.key)) {
+                e.preventDefault();
             }
 
-            let c00;
-            let c01;
-            let c02;
-            let c10;
-            let c11;
-            let c12;
-
-            // console.log(`${verticesXBuf[0]}, ${verticesXBuf[1]}, ${verticesXBuf[2]}`);
-
-            // Insertion sort vertices by Y
-            let i = 1;
-            while (i < 3 /* length */) {
-                let j = i;
-                while (j > 0 && vertexBuf[j - 1].y > vertexBuf[j].y) {
-                    let tmp = vertexBuf[j];
-                    vertexBuf[j] = vertexBuf[j - 1];
-                    vertexBuf[j - 1] = tmp;
-
-                    j--;
-                }
-                i++;
+            switch (e.code) {
+                case "Backquote":
+                    if (this.shiftLeft) {
+                        canvasElement.requestPointerLock();
+                    }
+                    break;
             }
 
-            let line = bounds(0, HEIGHT, vertexBuf[0].y);
-            let endingLine = bounds(0, HEIGHT, vertexBuf[2].y);
+            keyEvent(e.code, true);
+        };
+        document.onkeyup = e => {
+            if (block.includes(e.key)) {
+                e.preventDefault();
+            }
 
-            for (; line < endingLine; line++) {
-                // left edge: 0-1 
-                // right edge: 0-2 
-                let leftEdge0 = vertexBuf[1];
-                let leftEdge1 = vertexBuf[0];
+            keyEvent(e.code, false);
+        };
 
-                let rightEdge0 = vertexBuf[0];
-                let rightEdge1 = vertexBuf[2];
+        let dropHandler = (ev: Event | any) => {
+            let expoRender = this;
+            if (ev.dataTransfer.files[0] instanceof Blob) {
+                console.log("File(s) dropped");
 
-                // if (line == leftEdge0.y) {
-                //     vertexBuf[0].color ^= 0xFFFFFF00;
-                //     vertexBuf[1].color ^= 0xFFFFFF00;
-                //     vertexBuf[2].color ^= 0xFFFFFF00;
-                // }
+                ev.preventDefault();
 
-                if (line >= leftEdge0.y && !(rightEdge1.y == line && leftEdge0.y == line)) {
-                    leftEdge1 = rightEdge1;
+                let reader = new FileReader();
+                reader.onload = function () {
+                    if (this.result instanceof ArrayBuffer) {
+                        let dec = new TextDecoder("utf-8");
+                        let newTris = parseObjFile(dec.decode(new Uint8Array(this.result)), expoRender.objXFlip, expoRender.objYFlip, expoRender.objZFlip);
 
-                    let tmp = leftEdge1;
-                    leftEdge1 = leftEdge0;
-                    leftEdge0 = tmp;
-                }
-
-                let leftEdgeHeight = leftEdge1.y - leftEdge0.y;
-                let rightEdgeHeight = rightEdge1.y - rightEdge0.y;
-
-                let leftEdgeStartY = min(leftEdge1.y, leftEdge0.y);
-                let rightEdgeStartY = min(rightEdge1.y, rightEdge0.y);
-
-                let leftEdgeRelativeY = line - leftEdgeStartY;
-                let rightEdgeRelativeY = line - rightEdgeStartY;
-
-                let leftEdgeXRatio = abs(leftEdgeRelativeY / leftEdgeHeight);
-                let rightEdgeXRatio = abs(rightEdgeRelativeY / rightEdgeHeight);
-
-                let leftEdgeColorLerped = lerpColor(leftEdge1.color, leftEdge0.color, leftEdgeXRatio);
-                let rightEdgeColorLerped = lerpColor(rightEdge0.color, rightEdge1.color, rightEdgeXRatio);
-
-                let leftEdgeZLerped = lerp(leftEdge1.z, leftEdge0.z, leftEdgeXRatio);
-                let rightEdgeZLerped = lerp(rightEdge0.z, rightEdge1.z, rightEdgeXRatio);
-
-                let leftEdgeLerped = lerp(leftEdge1.x, leftEdge0.x, leftEdgeXRatio);
-                let rightEdgeLerped = lerp(rightEdge0.x, rightEdge1.x, rightEdgeXRatio);
-
-                // debug(`
-                //     L: ${leftEdgeHeight}
-                //     R: ${rightEdgeHeight}
-                // `);
-
-                // console.log(`left  X ratio: ${leftEdgeXRatio}`)
-                // console.log(`right X ratio: ${rightEdgeXRatio}`)
-
-                // console.log(`left X: ${leftEdge0X}`)
-
-                // If the left is to the right of the right for some reason, swap left and right
-                // (allow arbitrary winding order)
-                if (leftEdgeLerped >= rightEdgeLerped) {
-                    let tmp = rightEdgeLerped;
-                    rightEdgeLerped = leftEdgeLerped;
-                    leftEdgeLerped = tmp;
-
-                    let tmpColor = rightEdgeColorLerped;
-                    rightEdgeColorLerped = leftEdgeColorLerped;
-                    leftEdgeColorLerped = tmpColor;
-
-                    let tmpZ = rightEdgeZLerped;
-                    rightEdgeZLerped = leftEdgeZLerped;
-                    leftEdgeZLerped = tmpZ;
-                }
-
-                c00 = (leftEdgeColorLerped >> 24) & 0xFF;
-                c01 = (leftEdgeColorLerped >> 16) & 0xFF;
-                c02 = (leftEdgeColorLerped >> 8) & 0xFF;
-                c10 = (rightEdgeColorLerped >> 24) & 0xFF;
-                c11 = (rightEdgeColorLerped >> 16) & 0xFF;
-                c12 = (rightEdgeColorLerped >> 8) & 0xFF;
-
-                let lineLengthNoClip = rightEdgeLerped - leftEdgeLerped;
-
-                let z = leftEdgeZLerped;
-                let c0 = c00;
-                let c1 = c01;
-                let c2 = c02;
-
-                let zPerPixel = (rightEdgeZLerped - leftEdgeZLerped) / lineLengthNoClip;
-                let c0PerPixel = (c10 - c00) / lineLengthNoClip;
-                let c1PerPixel = (c11 - c01) / lineLengthNoClip;
-                let c2PerPixel = (c12 - c02) / lineLengthNoClip;
-
-                if (leftEdgeLerped < 0) {
-                    z -= zPerPixel * leftEdgeLerped;
-                    c0 -= c0PerPixel * leftEdgeLerped;
-                    c1 -= c1PerPixel * leftEdgeLerped;
-                    c2 -= c2PerPixel * leftEdgeLerped;
-
-                    leftEdgeLerped = 0;
-                }
-
-                rightEdgeLerped = bounds(0, WIDTH, rightEdgeLerped);
-
-                let leftEdgeLerpedRounded = leftEdgeLerped | 0;
-                let rightEdgeLerpedRounded = rightEdgeLerped | 0;
-
-                // console.log(`lerped left  X: ${leftEdgeLerped}`)
-                // console.log(`lerped right X: ${rightEdgeLerped}`)
-
-                let lineLength = rightEdgeLerpedRounded - leftEdgeLerpedRounded;
-                // console.log(`length: ${lineLength}`)
-
-                // pls mr runtime, round down...
-                let zBase = line * WIDTH + leftEdgeLerpedRounded;
-                let base = zBase * BYTES_PER_PIXEL;
-
-                if (!renderZ) {
-                    for (; leftEdgeLerpedRounded < rightEdgeLerpedRounded; leftEdgeLerpedRounded++) {
-                        if (z >= activeZBuffer[zBase]) {
-                            buffer.data[base + 0] = c0; /* R */;
-                            buffer.data[base + 1] = c1; /* G */;
-                            buffer.data[base + 2] = c2; /* B */;
-
-                            zBuffer[zBase] = z;
-                            gBuffer[zBase] = materialId;
+                        for (let i = 0; i < newTris.length; i++) {
+                            expoRender.tris.push(newTris[i]);
                         }
-
-                        z += zPerPixel;
-                        c0 += c0PerPixel;
-                        c1 += c1PerPixel;
-                        c2 += c2PerPixel;
-
-                        base += 4;
-                        zBase += 1;
                     }
-                } else {
-                    for (; leftEdgeLerpedRounded < rightEdgeLerpedRounded; leftEdgeLerpedRounded++) {
-                        if (z >= activeZBuffer[zBase]) {
-                            let renderZ = z;
-                            if (renderZ < lowZ) lowZ = renderZ;
-                            if (renderZ > highZ) highZ = renderZ;
-                            renderZ -= activeLowZ;
-                            renderZ *= (255 / (activeHighZ - activeLowZ));
+                };
+                reader.readAsArrayBuffer(ev.dataTransfer.files[0]);
+            }
+        };
 
-                            buffer.data[base + 0] = renderZ;
-                            buffer.data[base + 1] = renderZ;
-                            buffer.data[base + 2] = renderZ;
+        function dragoverHandler(ev: Event | any) {
+            ev.preventDefault();
+        }
 
-                            zBuffer[zBase] = z;
-                        }
+        window.addEventListener("drop", dropHandler);
+        window.addEventListener("dragover", dragoverHandler);
 
-                        z += zPerPixel;
+        window.canvas = document.getElementById("canvas") as HTMLCanvasElement;
+        window.ctx = window.canvas.getContext("2d")!;
+        if (window.canvas) {
+            console.log("Hello ExpoRender!");
+        } else {
+            console.log("Couldn't load canvas");
+        }
 
-                        base += 4;
-                        zBase += 1;
-                    }
+        document.getElementById("rotate")!.onclick = e => { this.rotate = (e as any).target.checked; };
+        document.getElementById("fill")!.onclick = e => { this.fill = (e as any).target.checked; };
+        document.getElementById("wireframe")!.onclick = e => { this.wireframe = (e as any).target.checked; };
+        document.getElementById("render-z")!.onclick = e => { this.renderZ = (e as any).target.checked; };
+        document.getElementById("depth-test")!.onclick = e => { this.depthTest = (e as any).target.checked; };
+        document.getElementById("ssao")!.onclick = e => { this.ssao = (e as any).target.checked; };
+        document.getElementById("perspective-transform")!.onclick = e => { this.perspectiveTransform = (e as any).target.checked; };
+        document.getElementById("normal-shading")!.onclick = e => { this.normalShading = (e as any).target.checked; };
+        document.getElementById("triangle-0-z")!.oninput = e => { this.triangle0Z = parseInt((e as any).target.value); };
+        document.getElementById("x-slider")!.oninput = e => { this.cameraTranslateX = parseInt((e as any).target.value); };
+        document.getElementById("y-slider")!.oninput = e => { this.cameraTranslateY = parseInt((e as any).target.value); };
+        document.getElementById("z-slider")!.oninput = e => { this.cameraTranslateZ = parseInt((e as any).target.value); };
+        document.getElementById("x-rotation")!.oninput = e => { this.globalRotateX = parseInt((e as any).target.value); };
+        document.getElementById("y-rotation")!.oninput = e => { this.globalRotateY = parseInt((e as any).target.value); };
+        document.getElementById("z-rotation")!.oninput = e => { this.globalRotateZ = parseInt((e as any).target.value); };
+        document.getElementById("vertex-dots")!.onclick = e => { this.vertexDots = (e as any).target.checked; };
+        document.getElementById("obj-x-flip")!.onclick = e => { this.objXFlip = (e as any).target.checked; };
+        document.getElementById("obj-y-flip")!.onclick = e => { this.objYFlip = (e as any).target.checked; };
+        document.getElementById("obj-z-flip")!.onclick = e => { this.objZFlip = (e as any).target.checked; };
+        document.getElementById("normal-y-flip")!.onclick = e => { this.normalYFlip = (e as any).target.checked; };
+
+        this.rotate = (document.getElementById("rotate") as any).checked;
+        this.fill = (document.getElementById("fill") as any).checked;
+        this.wireframe = (document.getElementById("wireframe") as any).checked;
+        this.renderZ = (document.getElementById("render-z") as any).checked;
+        this.depthTest = (document.getElementById("depth-test") as any).checked;
+        this.ssao = (document.getElementById("ssao") as any).checked;
+        this.perspectiveTransform = (document.getElementById("perspective-transform") as any).checked;
+        this.normalShading = (document.getElementById("normal-shading") as any).checked;
+        this.triangle0Z = parseInt((document.getElementById("triangle-0-z") as any).value);
+        this.cameraTranslateX = parseInt((document.getElementById("x-slider") as any).value);
+        this.cameraTranslateY = parseInt((document.getElementById("y-slider") as any).value);
+        this.cameraTranslateZ = parseInt((document.getElementById("z-slider") as any).value);
+
+        this.init();
+
+        requestAnimationFrame(this.frameDriver.bind(this));
+    };
+
+
+    rasterize() {
+        this.activeLowZ = this.lowZ;
+        this.activeHighZ = this.highZ;
+        this.lowZ = 0;
+        this.highZ = 0;
+
+        let activeZBuffer = this.depthTest ? this.zBuffer : this.zBufferAlwaysBlank;
+
+        if (this.fill) {
+            triLoop:
+            for (let t = 0; t < this.renderTrisCount; t++) {
+                let tri = this.renderTris[t];
+                let materialId = tri.material;
+
+                for (let v = 0; v < 3; v++) {
+                    // Place vertices into temporary buffers
+                    this.vertexBuf[v].x = tri.verticesX[v];
+                    this.vertexBuf[v].y = tri.verticesY[v];
+                    this.vertexBuf[v].z = tri.verticesZ[v];
+                    this.vertexBuf[v].color = tri.colors[v];
                 }
 
-                pixelsFilled += lineLength;
-                linesFilled++;
+                let c00;
+                let c01;
+                let c02;
+                let c10;
+                let c11;
+                let c12;
+
+                // console.log(`${verticesXBuf[0]}, ${verticesXBuf[1]}, ${verticesXBuf[2]}`);
+
+                // Insertion sort vertices by Y
+                let i = 1;
+                while (i < 3 /* length */) {
+                    let j = i;
+                    while (j > 0 && this.vertexBuf[j - 1].y > this.vertexBuf[j].y) {
+                        let tmp = this.vertexBuf[j];
+                        this.vertexBuf[j] = this.vertexBuf[j - 1];
+                        this.vertexBuf[j - 1] = tmp;
+
+                        j--;
+                    }
+                    i++;
+                }
+
+                let line = bounds(0, HEIGHT, this.vertexBuf[0].y);
+                let endingLine = bounds(0, HEIGHT, this.vertexBuf[2].y);
+
+                for (; line < endingLine; line++) {
+                    // left edge: 0-1 
+                    // right edge: 0-2 
+                    let leftEdge0 = this.vertexBuf[1];
+                    let leftEdge1 = this.vertexBuf[0];
+
+                    let rightEdge0 = this.vertexBuf[0];
+                    let rightEdge1 = this.vertexBuf[2];
+
+                    // if (line == leftEdge0.y) {
+                    //     vertexBuf[0].color ^= 0xFFFFFF00;
+                    //     vertexBuf[1].color ^= 0xFFFFFF00;
+                    //     vertexBuf[2].color ^= 0xFFFFFF00;
+                    // }
+
+                    if (line >= leftEdge0.y && !(rightEdge1.y == line && leftEdge0.y == line)) {
+                        leftEdge1 = rightEdge1;
+
+                        let tmp = leftEdge1;
+                        leftEdge1 = leftEdge0;
+                        leftEdge0 = tmp;
+                    }
+
+                    let leftEdgeHeight = leftEdge1.y - leftEdge0.y;
+                    let rightEdgeHeight = rightEdge1.y - rightEdge0.y;
+
+                    let leftEdgeStartY = min(leftEdge1.y, leftEdge0.y);
+                    let rightEdgeStartY = min(rightEdge1.y, rightEdge0.y);
+
+                    let leftEdgeRelativeY = line - leftEdgeStartY;
+                    let rightEdgeRelativeY = line - rightEdgeStartY;
+
+                    let leftEdgeXRatio = abs(leftEdgeRelativeY / leftEdgeHeight);
+                    let rightEdgeXRatio = abs(rightEdgeRelativeY / rightEdgeHeight);
+
+                    let leftEdgeColorLerped = lerpColor(leftEdge1.color, leftEdge0.color, leftEdgeXRatio);
+                    let rightEdgeColorLerped = lerpColor(rightEdge0.color, rightEdge1.color, rightEdgeXRatio);
+
+                    let leftEdgeZLerped = lerp(leftEdge1.z, leftEdge0.z, leftEdgeXRatio);
+                    let rightEdgeZLerped = lerp(rightEdge0.z, rightEdge1.z, rightEdgeXRatio);
+
+                    let leftEdgeLerped = lerp(leftEdge1.x, leftEdge0.x, leftEdgeXRatio);
+                    let rightEdgeLerped = lerp(rightEdge0.x, rightEdge1.x, rightEdgeXRatio);
+
+                    // debug(`
+                    //     L: ${leftEdgeHeight}
+                    //     R: ${rightEdgeHeight}
+                    // `);
+
+                    // console.log(`left  X ratio: ${leftEdgeXRatio}`)
+                    // console.log(`right X ratio: ${rightEdgeXRatio}`)
+
+                    // console.log(`left X: ${leftEdge0X}`)
+
+                    // If the left is to the right of the right for some reason, swap left and right
+                    // (allow arbitrary winding order)
+                    if (leftEdgeLerped >= rightEdgeLerped) {
+                        let tmp = rightEdgeLerped;
+                        rightEdgeLerped = leftEdgeLerped;
+                        leftEdgeLerped = tmp;
+
+                        let tmpColor = rightEdgeColorLerped;
+                        rightEdgeColorLerped = leftEdgeColorLerped;
+                        leftEdgeColorLerped = tmpColor;
+
+                        let tmpZ = rightEdgeZLerped;
+                        rightEdgeZLerped = leftEdgeZLerped;
+                        leftEdgeZLerped = tmpZ;
+                    }
+
+                    c00 = (leftEdgeColorLerped >> 24) & 0xFF;
+                    c01 = (leftEdgeColorLerped >> 16) & 0xFF;
+                    c02 = (leftEdgeColorLerped >> 8) & 0xFF;
+                    c10 = (rightEdgeColorLerped >> 24) & 0xFF;
+                    c11 = (rightEdgeColorLerped >> 16) & 0xFF;
+                    c12 = (rightEdgeColorLerped >> 8) & 0xFF;
+
+                    let lineLengthNoClip = rightEdgeLerped - leftEdgeLerped;
+
+                    let z = leftEdgeZLerped;
+                    let c0 = c00;
+                    let c1 = c01;
+                    let c2 = c02;
+
+                    let zPerPixel = (rightEdgeZLerped - leftEdgeZLerped) / lineLengthNoClip;
+                    let c0PerPixel = (c10 - c00) / lineLengthNoClip;
+                    let c1PerPixel = (c11 - c01) / lineLengthNoClip;
+                    let c2PerPixel = (c12 - c02) / lineLengthNoClip;
+
+                    if (leftEdgeLerped < 0) {
+                        z -= zPerPixel * leftEdgeLerped;
+                        c0 -= c0PerPixel * leftEdgeLerped;
+                        c1 -= c1PerPixel * leftEdgeLerped;
+                        c2 -= c2PerPixel * leftEdgeLerped;
+
+                        leftEdgeLerped = 0;
+                    }
+
+                    rightEdgeLerped = bounds(0, WIDTH, rightEdgeLerped);
+
+                    let leftEdgeLerpedRounded = leftEdgeLerped | 0;
+                    let rightEdgeLerpedRounded = rightEdgeLerped | 0;
+
+                    // console.log(`lerped left  X: ${leftEdgeLerped}`)
+                    // console.log(`lerped right X: ${rightEdgeLerped}`)
+
+                    let lineLength = rightEdgeLerpedRounded - leftEdgeLerpedRounded;
+                    // console.log(`length: ${lineLength}`)
+
+                    // pls mr runtime, round down...
+                    let zBase = line * WIDTH + leftEdgeLerpedRounded;
+                    let base = zBase * BYTES_PER_PIXEL;
+
+                    if (!this.renderZ) {
+                        for (; leftEdgeLerpedRounded < rightEdgeLerpedRounded; leftEdgeLerpedRounded++) {
+                            if (z >= activeZBuffer[zBase]) {
+                                this.buffer.data[base + 0] = c0; /* R */;
+                                this.buffer.data[base + 1] = c1; /* G */;
+                                this.buffer.data[base + 2] = c2; /* B */;
+
+                                this.zBuffer[zBase] = z;
+                                this.gBuffer[zBase] = materialId;
+                            }
+
+                            z += zPerPixel;
+                            c0 += c0PerPixel;
+                            c1 += c1PerPixel;
+                            c2 += c2PerPixel;
+
+                            base += 4;
+                            zBase += 1;
+                        }
+                    } else {
+                        for (; leftEdgeLerpedRounded < rightEdgeLerpedRounded; leftEdgeLerpedRounded++) {
+                            if (z >= activeZBuffer[zBase]) {
+                                let renderZ = z;
+                                if (renderZ < this.lowZ) this.lowZ = renderZ;
+                                if (renderZ > this.highZ) this.highZ = renderZ;
+                                renderZ -= this.activeLowZ;
+                                renderZ *= (255 / (this.activeHighZ - this.activeLowZ));
+
+                                this.buffer.data[base + 0] = renderZ;
+                                this.buffer.data[base + 1] = renderZ;
+                                this.buffer.data[base + 2] = renderZ;
+
+                                this.zBuffer[zBase] = z;
+                            }
+
+                            z += zPerPixel;
+
+                            base += 4;
+                            zBase += 1;
+                        }
+                    }
+
+                    this.pixelsFilled += lineLength;
+                    this.linesFilled++;
+                }
+            }
+        }
+
+        if (this.wireframe) {
+            for (let t = 0; t < this.renderTrisCount; t++) {
+                let tri = this.renderTris[t];
+
+                // let color = tri.colors[0];
+
+                // const c0 = (color >> 24) & 0xFF;
+                // const c1 = (color >> 16) & 0xFF;
+                // const c2 = (color >> 8) & 0xFF;
+                // const c3 = (color >> 0) & 0xFF;
+
+                // const lc0 = lerp(c0, 0xFF, 0.5);
+                // const lc1 = lerp(c1, 0xFF, 0.5);
+                // const lc2 = lerp(c2, 0xFF, 0.5);
+
+                // let lineColor = ((c0 << 0) | (c1 << 8) | (c2 << 16) | (c3 << 24)) ^ 0xFFFFFF00;
+
+                this.drawLine(tri.verticesX[0], tri.verticesY[0], tri.verticesX[1], tri.verticesY[1], 0x000000FF);
+                this.drawLine(tri.verticesX[1], tri.verticesY[1], tri.verticesX[2], tri.verticesY[2], 0x000000FF);
+                this.drawLine(tri.verticesX[2], tri.verticesY[2], tri.verticesX[0], tri.verticesY[0], 0x000000FF);
             }
         }
     }
 
-    if (wireframe) {
-        for (let t = 0; t < renderTrisCount; t++) {
-            let tri = renderTris[t];
+    postProcess() {
+        for (let y = 1; y < HEIGHT - 1; y++) {
+            let p = (WIDTH * 1) * y + 1;
+            let screenIndex = p * 4;
+            for (let x = 1; x < WIDTH - 1; x++) {
+                if (this.gBuffer[p] != G_BUFFER_CLEAR_VAL) {
+                    let core = this.zBuffer[p];
+                    let occlusion = 0;
 
-            // let color = tri.colors[0];
+                    // SSAO
+                    // Sample 3x3 area - index up 1 and left 1 
+                    // const initIndex = (p - (WIDTH * 1)) - 1;
+                    // let index = initIndex;
 
-            // const c0 = (color >> 24) & 0xFF;
-            // const c1 = (color >> 16) & 0xFF;
-            // const c2 = (color >> 8) & 0xFF;
-            // const c3 = (color >> 0) & 0xFF;
+                    // for (let i = 0; i < 3; i++) {
+                    //     let subIndex = index;
+                    //     for (let j = 0; j < 3; j++) {
+                    //         if (gBuffer[subIndex] != G_BUFFER_CLEAR_VAL) {
+                    //             let depth = zBuffer[subIndex];
+                    //             const threshold = 32;
+                    //             let diff = abs(depth - core);
+                    //             if (diff > threshold) {
+                    //                 diff *= smoothstep(1, 0, (diff + threshold) / 64);
+                    //             }
+                    //             occlusion += diff;
+                    //         }
 
-            // const lc0 = lerp(c0, 0xFF, 0.5);
-            // const lc1 = lerp(c1, 0xFF, 0.5);
-            // const lc2 = lerp(c2, 0xFF, 0.5);
+                    //         subIndex++;
+                    //     }
+                    //     index += WIDTH;
+                    // }
 
-            // let lineColor = ((c0 << 0) | (c1 << 8) | (c2 << 16) | (c3 << 24)) ^ 0xFFFFFF00;
 
-            drawLine(tri.verticesX[0], tri.verticesY[0], tri.verticesX[1], tri.verticesY[1], 0x000000FF);
-            drawLine(tri.verticesX[1], tri.verticesY[1], tri.verticesX[2], tri.verticesY[2], 0x000000FF);
-            drawLine(tri.verticesX[2], tri.verticesY[2], tri.verticesX[0], tri.verticesY[0], 0x000000FF);
+                    // Edge marking
+                    const materialId = this.gBuffer[p];
+                    if (
+                        this.gBuffer[p - 1] > materialId ||
+                        this.gBuffer[p + 1] > materialId ||
+                        this.gBuffer[p + WIDTH] > materialId ||
+                        this.gBuffer[p - WIDTH] > materialId
+                    ) {
+                        const EDGE_VAL = 0x7F;
+                        this.buffer.data[screenIndex + 0] = EDGE_VAL;
+                        this.buffer.data[screenIndex + 1] = EDGE_VAL;
+                        this.buffer.data[screenIndex + 2] = EDGE_VAL;
+                    } else {
+                        let sub = max(0, occlusion) * 2;
+                        this.buffer.data[screenIndex + 0] = this.buffer.data[screenIndex + 0] - sub;
+                        this.buffer.data[screenIndex + 1] = this.buffer.data[screenIndex + 1] - sub;
+                        this.buffer.data[screenIndex + 2] = this.buffer.data[screenIndex + 2] - sub;
+                    }
+                }
+
+                screenIndex += 4;
+                p++;
+            }
         }
+    }
+
+    drawLine(x0: number, y0: number, x1: number, y1: number, color: number) {
+        let low: boolean;
+        let swap: boolean;
+        let dx0: number;
+        let dy0: number;
+        let dx1: number;
+        let dy1: number;
+
+        if (abs(y1 - y0) < abs(x1 - x0)) {
+            low = true;
+            swap = x0 > x1;
+        } else {
+            low = false;
+            swap = y0 > y1;
+        }
+
+        if (swap) {
+            dx0 = x1;
+            dy0 = y1;
+            dx1 = x0;
+            dy1 = y0;
+        } else {
+            dx0 = x0;
+            dy0 = y0;
+            dx1 = x1;
+            dy1 = y1;
+        }
+
+        if (low) {
+            let dx = dx1 - dx0;
+            let dy = dy1 - dy0;
+
+            let yi = 1;
+
+            if (dy < 0) {
+                yi = -1;
+                dy = -dy;
+            }
+
+            let d = (2 * dy) - dx;
+            let y = dy0;
+
+            for (let x = dx0; x <= dx1; x++) {
+                this.setPixel(x, y, color);
+                if (d > 0) {
+                    y = y + yi;
+                    d = d + (2 * (dy - dx));
+                } else {
+                    d = d + 2 * dy;
+                }
+                this.pixelsFilled++;
+            }
+        } else {
+            let dx = dx1 - dx0;
+            let dy = dy1 - dy0;
+
+            let xi = 1;
+
+            if (dx < 0) {
+                xi = -1;
+                dx = -dx;
+            }
+
+            let d = (2 * dx) - dy;
+            let x = dx0;
+
+            for (let y = dy0; y <= dy1; y++) {
+                this.setPixel(x, y, color);
+                if (d > 0) {
+                    x = x + xi;
+                    d = d + (2 * (dx - dy));
+                } else {
+                    d = d + 2 * dx;
+                }
+                this.pixelsFilled++;
+            }
+        }
+    }
+
+    drawCrosshair() {
+        switch (this.crossVertIndex) {
+            case 0: col = 0xFF0000FF; break;
+            case 1: col = 0x00FF00FF; break;
+            case 2: col = 0x0000FFFF; break;
+        }
+
+        let x = this.crossX;
+        let y = this.crossY;
+
+        this.setPixel(x + 0, y - 1, col);
+        this.setPixel(x + 0, y - 2, col);
+
+        this.setPixel(x + 0, y + 1, col);
+        this.setPixel(x + 0, y + 2, col);
+
+        this.setPixel(x - 1, y + 0, col);
+        this.setPixel(x - 2, y + 0, col);
+
+        this.setPixel(x + 1, y + 0, col);
+        this.setPixel(x + 2, y + 0, col);
+    }
+
+    invertColorAt(x: number, y: number) {
+        // Invert RGB channels
+        this.setPixel(x, y, this.getPixel(x, y) ^ 0xFFFFFF00);
+    }
+
+    drawDots() {
+        for (let t = 0; t < this.tris.length; t++) {
+            let tri = this.renderTris[t];
+            for (let v = 0; v < 3; v++) {
+                let col = tri.colors[v];
+                let x = tri.verticesX[v] | 0;
+                let y = tri.verticesY[v] | 0;
+                this.setPixel(x - 1, y - 1, col);
+                this.setPixel(x + 0, y - 1, col);
+                this.setPixel(x + 1, y - 1, col);
+                this.setPixel(x - 1, y + 0, col);
+                this.setPixel(x + 1, y + 0, col);
+                this.setPixel(x - 1, y + 1, col);
+                this.setPixel(x + 0, y + 1, col);
+                this.setPixel(x + 1, y + 1, col);
+            }
+        }
+    }
+
+    setPixel(x: number, y: number, col: number) {
+        if (x >= WIDTH) return;
+        if (y >= HEIGHT) return;
+
+        const c0 = (col >> 24) & 0xFF;
+        const c1 = (col >> 16) & 0xFF;
+        const c2 = (col >> 8) & 0xFF;
+        const c3 = (col >> 0) & 0xFF;
+
+        let base = ((y * WIDTH) + x) * BYTES_PER_PIXEL;
+        this.buffer.data[base + 0] = c0;
+        this.buffer.data[base + 1] = c1;
+        this.buffer.data[base + 2] = c2;
+        this.buffer.data[base + 3] = c3;
+    }
+
+    getPixel(x: number, y: number): number {
+        let base = ((y * WIDTH) + x) * BYTES_PER_PIXEL;
+        return (this.buffer.data[base + 0] << 24) |
+            (this.buffer.data[base + 1] << 16) |
+            (this.buffer.data[base + 2] << 8) |
+            (this.buffer.data[base + 3] << 0);
+    }
+
+    init() {
+        this.tris = new Array(1).fill(0).map(
+            () => new Triangle(
+                0, 0, 0,
+                0, 0, 0,
+                0, 0, 0,
+
+                0xFF0000FF,
+                0x00FF00FF,
+                0x0000FFFF
+            )
+        );
+
+        this.renderTris = new Array(4);
+
+        this.tris[0].verticesX[2] = 127 + 1;
+        this.tris[0].verticesY[2] = 27 - 1;
+        this.tris[0].verticesX[1] = 195 + 1;
+        this.tris[0].verticesY[1] = 163 - 1;
+        this.tris[0].verticesX[0] = 59 + 1;
+        this.tris[0].verticesY[0] = 163 - 1;
+
+        for (let i = 0; i < this.zBufferAlwaysBlank.length; i++) {
+            this.zBufferAlwaysBlank[i] = Z_BUFFER_CLEAR_VAL;
+        }
+    }
+
+    clear() {
+        let pos = 0;
+        for (let i = 0; i < WIDTH * HEIGHT; i++) {
+            for (let j = 0; j < BYTES_PER_PIXEL; j++) {
+                this.buffer.data[pos++] = this.clearColor[j];
+            }
+            this.zBuffer[i] = Z_BUFFER_CLEAR_VAL;
+            this.gBuffer[i] = G_BUFFER_CLEAR_VAL;
+        }
+        this.pixelsFilled += WIDTH * HEIGHT;
+    }
+
+    display() {
+        window.ctx.putImageData(this.buffer, 0, 0);
+    }
+
+    frame(time: DOMHighResTimeStamp) {
+        let deltaTime = time - lastTime;
+        lastTime = time;
+        // let ratio = (Math.sin(time / 1000) + 1) / 2;
+        // let x = lerp(0, 400, ratio);
+
+        // clockwise winding order
+        // tris[0].set(
+        //     96, 64, 0,
+        //     160, 128, 0,
+        //     96, 128, 0,
+
+        //     0xFF7F7FFF,
+        //     0xFF7F7FFF,
+        //     0xFF7F7FFF,
+        // );
+
+        // tris[1].set(
+        //     96, 64, 0,
+        //     160, 64, 0,
+        //     160, 128, 0,
+
+        //     0xFF7F7FFF,
+        //     0xFF7F7FFF,
+        //     0xFF7F7FFF,
+        // );
+
+        // tris[2].set(
+        //     32 + 96, 64, 20,
+        //     32 + 160, 128, 20,
+        //     32 + 96, 128, 20,
+
+        //     0x7FFF7FFF,
+        //     0x7FFF7FFF,
+        //     0x7FFF7FFF,
+        // );
+
+        // tris[3].set(
+        //     32 + 96, 64, 20,
+        //     32 + 160, 64, 20,
+        //     32 + 160, 128, 20,
+
+        //     0x7FFF7FFF,
+        //     0x7FFF7FFF,
+        //     0x7FFF7FFF,
+        // );
+
+        // 79.57741211: 1 rotation per second
+        // let speedMul = 0.5;
+        // // let rad = time / (Math.PI * 2 * 79.57741211 / speedMul);
+
+        sinY = Math.sin(toRadians(this.cameraRotateY));
+        cosY = Math.cos(toRadians(this.cameraRotateY));
+        sinX = Math.sin(toRadians(this.cameraRotateX));
+        cosX = Math.cos(toRadians(this.cameraRotateX));
+        sinZ = Math.sin(toRadians(this.cameraRotateZ));
+        cosZ = Math.cos(toRadians(this.cameraRotateZ));
+
+        movementVector.set(0, 0, 0);
+
+        let moveBy = (deltaTime / 16) * this.flySpeedMul;
+        if (this.moveUp) this.cameraTranslateY += moveBy;
+        if (this.moveDown) this.cameraTranslateY -= moveBy;
+        if (this.moveForward) movementVector.z += moveBy;
+        if (this.moveBackward) movementVector.z -= moveBy;
+        if (this.moveLeft) movementVector.x += moveBy;
+        if (this.moveRight) movementVector.x -= moveBy;
+
+        rotateVecXz(movementVector, sinY, cosY);
+
+        this.cameraTranslateZ += movementVector.z;
+        this.cameraTranslateX += movementVector.x;
+
+        moveBy = deltaTime / 8;
+        if (this.lookLeft) this.cameraRotateY -= moveBy;
+        if (this.lookRight) this.cameraRotateY += moveBy;
+        if (this.lookDown) this.cameraRotateX += moveBy;
+        if (this.lookUp) this.cameraRotateX -= moveBy;
+
+        // cameraRotateY += moveBy / 40;
+
+        // let triangle0Z = Math.sin(time / (100000 * 10)) * 50;
+        this.tris[0].verticesZ[0] = this.triangle0Z;
+        this.tris[0].verticesZ[1] = this.triangle0Z;
+        this.tris[0].verticesZ[2] = this.triangle0Z;
+        this.tris[0].material = 12345;
+
+        // let rad = toRadians(parseInt((document.getElementById("slider")! as HTMLInputElement).value)) / (Math.PI * 2);
+        // let sin = Math.sin(rad);
+        // let cos = Math.cos(rad);
+        // rotate(tris[0], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
+        // rotate(tris[1], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
+        // rotate(tris[2], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
+        // rotate(tris[3], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
+        // rotate(tris[2], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
+        // rotate(tris[3], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
+
+        // `[${matrixTruncater(cos)}, ${matrixTruncater(-sin)}]
+        // [${matrixTruncater(sin)}, ${matrixTruncater(cos)}]
+        // debug(`
+        // Pixels filled: ${pixelsFilled}`
+        // );
+
+        this.clear();
+
+        this.processTransformations();
+        this.rasterize();
+        if (this.ssao) this.postProcess();
+
+        if (this.vertexDots) this.drawDots();
+        if (!this.pointerCaptured) this.drawCrosshair();
+
+        this.display();
+
+        this.frameCount++;
+
+        if (time >= this.frameTimeCounterNext) {
+            this.frameTimeCounterNext += 1000;
+            debug(
+                `FPS: ${this.frameCount}
+                 Lines: ${this.linesFilled}
+                 Tris: ${this.renderTrisCount}
+                 Pixels: ${this.pixelsFilled}
+
+                 Translate X: ${this.cameraTranslateX}
+                 Translate Y: ${this.cameraTranslateY}
+                 Translate Z: ${this.cameraTranslateZ}
+
+                 Rotate X: ${this.cameraRotateX}
+                 Rotate Y: ${this.cameraRotateY}
+                 Rotate Z: ${this.cameraRotateZ}
+                 `
+            );
+            this.frameCount = 0;
+        }
+
+        this.linesFilled = 0;
+        this.pixelsFilled = 0;
+    }
+
+    processTransformations() {
+        this.renderTrisCount = 0;
+
+        if (this.normalYFlip) {
+            this.upVec.y = -1;
+        } else {
+            this.upVec.y = 1;
+        }
+
+        this.cameraVec.x = 0;
+        this.cameraVec.y = 0;
+        this.cameraVec.z = -1;
+
+        if (this.rotate) {
+            rotateVecXz(this.cameraVec, sinY, cosY);
+            rotateVecYz(this.cameraVec, sinX, cosX);
+            rotateVecXy(this.cameraVec, sinZ, cosZ);
+        }
+
+        triLoop:
+        for (let i = 0; i < this.tris.length; i++) {
+            if (this.renderTris[this.renderTrisCount] == null) {
+                this.renderTris[this.renderTrisCount] = new Triangle();
+            }
+            let preTri = this.tris[i];
+
+            let renderTri = this.renderTris[this.renderTrisCount];
+
+            let ratio = 1;
+            if (this.normalShading) {
+                normalOfTriangle(preTri, renderTri.normal);
+                this.tmpVec.copyFrom(renderTri.normal);
+                ratio = angleBetweenVectors(this.tmpVec, this.upVec) / Math.PI;
+            }
+
+            for (let j = 0; j < 3; j++) {
+                renderTri.verticesX[j] = preTri.verticesX[j];
+                renderTri.verticesY[j] = preTri.verticesY[j];
+                renderTri.verticesZ[j] = preTri.verticesZ[j];
+
+                renderTri.colors[j] = lerpColor(0x000000FF, preTri.colors[j], ratio);
+            }
+            renderTri.material = preTri.material;
+
+            if (this.rotate) {
+                rotateTriXz(this.renderTris[this.renderTrisCount], HALF_WIDTH - this.cameraTranslateX, this.cameraTranslateZ, sinY, cosY);
+                rotateTriYz(this.renderTris[this.renderTrisCount], HALF_HEIGHT - this.cameraTranslateY, this.cameraTranslateZ, sinX, cosX);
+                rotateTriXy(this.renderTris[this.renderTrisCount], HALF_WIDTH, HALF_HEIGHT, sinZ, cosZ);
+            }
+
+            // TODO: Implement frustum culling
+            let xzInsideFrustum = true;
+
+            if (this.perspectiveTransform) {
+                for (let j = 0; j < 3; j++) {
+                    let centeredX = renderTri.verticesX[j] + this.cameraTranslateX - HALF_WIDTH;
+                    let centeredY = renderTri.verticesY[j] + this.cameraTranslateY - HALF_HEIGHT;
+                    let z = renderTri.verticesZ[j] - this.cameraTranslateZ;
+
+                    let finalX = (centeredX / ((z / (this.zDivisor * RESOLUTION_SCALE)))) + HALF_WIDTH;
+                    let finalY = (centeredY / ((z / (this.zDivisor * RESOLUTION_SCALE)))) + HALF_HEIGHT;
+
+                    // If vertex behind clipping plane, skip triangle
+                    if (z < NEAR_CLIPPING_PLANE) {
+                        if (finalX < 0 || finalX >= WIDTH || finalY < 0 || finalY >= HEIGHT) {
+                            continue triLoop;
+                        }
+                    }
+
+                    renderTri.verticesX[j] = finalX | 0;
+                    renderTri.verticesY[j] = finalY | 0;
+                    renderTri.verticesZ[j] = 1 / z;
+                }
+            } else {
+                for (let j = 0; j < 3; j++) {
+                    renderTri.verticesX[j] = (renderTri.verticesX[j] + this.cameraTranslateX) | 0;
+                    renderTri.verticesY[j] = (renderTri.verticesY[j] + this.cameraTranslateY) | 0;
+                }
+            }
+
+            if (xzInsideFrustum) this.renderTrisCount++;
+        }
+        x += Math.PI / (144 * 4);
+        x2 += Math.PI / (144);
+    }
+
+    frameDriver(time: DOMHighResTimeStamp) {
+        this.frame(time);
+        requestAnimationFrame(this.frameDriver.bind(this));
     }
 }
 
 let a = 1;
 let b = 0.5;
 
-function postProcess() {
-    for (let y = 1; y < HEIGHT - 1; y++) {
-        let p = (WIDTH * 1) * y + 1;
-        let screenIndex = p * 4;
-        for (let x = 1; x < WIDTH - 1; x++) {
-            if (gBuffer[p] != G_BUFFER_CLEAR_VAL) {
-                let core = zBuffer[p];
-                let occlusion = 0;
-
-                // SSAO
-                // Sample 3x3 area - index up 1 and left 1 
-                // const initIndex = (p - (WIDTH * 1)) - 1;
-                // let index = initIndex;
-
-                // for (let i = 0; i < 3; i++) {
-                //     let subIndex = index;
-                //     for (let j = 0; j < 3; j++) {
-                //         if (gBuffer[subIndex] != G_BUFFER_CLEAR_VAL) {
-                //             let depth = zBuffer[subIndex];
-                //             const threshold = 32;
-                //             let diff = abs(depth - core);
-                //             if (diff > threshold) {
-                //                 diff *= smoothstep(1, 0, (diff + threshold) / 64);
-                //             }
-                //             occlusion += diff;
-                //         }
-
-                //         subIndex++;
-                //     }
-                //     index += WIDTH;
-                // }
-
-
-                // Edge marking
-                const materialId = gBuffer[p];
-                if (
-                    gBuffer[p - 1] > materialId ||
-                    gBuffer[p + 1] > materialId ||
-                    gBuffer[p + WIDTH] > materialId ||
-                    gBuffer[p - WIDTH] > materialId
-                ) {
-                    const EDGE_VAL = 0x7F;
-                    buffer.data[screenIndex + 0] = EDGE_VAL;
-                    buffer.data[screenIndex + 1] = EDGE_VAL;
-                    buffer.data[screenIndex + 2] = EDGE_VAL;
-                } else {
-                    let sub = max(0, occlusion) * 2;
-                    buffer.data[screenIndex + 0] = buffer.data[screenIndex + 0] - sub;
-                    buffer.data[screenIndex + 1] = buffer.data[screenIndex + 1] - sub;
-                    buffer.data[screenIndex + 2] = buffer.data[screenIndex + 2] - sub;
-                }
-            }
-
-            screenIndex += 4;
-            p++;
-        }
-    }
-}
-
-// Implementation of Bresenham"s line algorithm
-function drawLine(x0: number, y0: number, x1: number, y1: number, color: number) {
-    let low: boolean;
-    let swap: boolean;
-    let dx0: number;
-    let dy0: number;
-    let dx1: number;
-    let dy1: number;
-
-    if (abs(y1 - y0) < abs(x1 - x0)) {
-        low = true;
-        swap = x0 > x1;
-    } else {
-        low = false;
-        swap = y0 > y1;
-    }
-
-    if (swap) {
-        dx0 = x1;
-        dy0 = y1;
-        dx1 = x0;
-        dy1 = y0;
-    } else {
-        dx0 = x0;
-        dy0 = y0;
-        dx1 = x1;
-        dy1 = y1;
-    }
-
-    if (low) {
-        let dx = dx1 - dx0;
-        let dy = dy1 - dy0;
-
-        let yi = 1;
-
-        if (dy < 0) {
-            yi = -1;
-            dy = -dy;
-        }
-
-        let d = (2 * dy) - dx;
-        let y = dy0;
-
-        for (let x = dx0; x <= dx1; x++) {
-            setPixel(x, y, color);
-            if (d > 0) {
-                y = y + yi;
-                d = d + (2 * (dy - dx));
-            } else {
-                d = d + 2 * dy;
-            }
-            pixelsFilled++;
-        }
-    } else {
-        let dx = dx1 - dx0;
-        let dy = dy1 - dy0;
-
-        let xi = 1;
-
-        if (dx < 0) {
-            xi = -1;
-            dx = -dx;
-        }
-
-        let d = (2 * dx) - dy;
-        let x = dx0;
-
-        for (let y = dy0; y <= dy1; y++) {
-            setPixel(x, y, color);
-            if (d > 0) {
-                x = x + xi;
-                d = d + (2 * (dx - dy));
-            } else {
-                d = d + 2 * dx;
-            }
-            pixelsFilled++;
-        }
-    }
-}
-
 let col = 0x000000FF;
-function drawCrosshair() {
-    switch (crossVertIndex) {
-        case 0: col = 0xFF0000FF; break;
-        case 1: col = 0x00FF00FF; break;
-        case 2: col = 0x0000FFFF; break;
-    }
-
-    let x = crossX;
-    let y = crossY;
-
-    setPixel(x + 0, y - 1, col);
-    setPixel(x + 0, y - 2, col);
-
-    setPixel(x + 0, y + 1, col);
-    setPixel(x + 0, y + 2, col);
-
-    setPixel(x - 1, y + 0, col);
-    setPixel(x - 2, y + 0, col);
-
-    setPixel(x + 1, y + 0, col);
-    setPixel(x + 2, y + 0, col);
-}
-
-function invertColorAt(x: number, y: number) {
-    // Invert RGB channels
-    setPixel(x, y, getPixel(x, y) ^ 0xFFFFFF00);
-}
-
-function drawDots() {
-    for (let t = 0; t < tris.length; t++) {
-        let tri = renderTris[t];
-        for (let v = 0; v < 3; v++) {
-            let col = tri.colors[v];
-            let x = tri.verticesX[v] | 0;
-            let y = tri.verticesY[v] | 0;
-            setPixel(x - 1, y - 1, col);
-            setPixel(x + 0, y - 1, col);
-            setPixel(x + 1, y - 1, col);
-            setPixel(x - 1, y + 0, col);
-            setPixel(x + 1, y + 0, col);
-            setPixel(x - 1, y + 1, col);
-            setPixel(x + 0, y + 1, col);
-            setPixel(x + 1, y + 1, col);
-        }
-    }
-}
-
-function setPixel(x: number, y: number, col: number) {
-    if (x >= WIDTH) return;
-    if (y >= HEIGHT) return;
-
-    const c0 = (col >> 24) & 0xFF;
-    const c1 = (col >> 16) & 0xFF;
-    const c2 = (col >> 8) & 0xFF;
-    const c3 = (col >> 0) & 0xFF;
-
-    let base = ((y * WIDTH) + x) * BYTES_PER_PIXEL;
-    buffer.data[base + 0] = c0;
-    buffer.data[base + 1] = c1;
-    buffer.data[base + 2] = c2;
-    buffer.data[base + 3] = c3;
-}
-
-function getPixel(x: number, y: number): number {
-    let base = ((y * WIDTH) + x) * BYTES_PER_PIXEL;
-    return (buffer.data[base + 0] << 24) |
-        (buffer.data[base + 1] << 16) |
-        (buffer.data[base + 2] << 8) |
-        (buffer.data[base + 3] << 0);
-}
-
-
-function clear() {
-    let pos = 0;
-    for (let i = 0; i < WIDTH * HEIGHT; i++) {
-        for (let j = 0; j < BYTES_PER_PIXEL; j++) {
-            buffer.data[pos++] = clearColor[j];
-        }
-        zBuffer[i] = Z_BUFFER_CLEAR_VAL;
-        gBuffer[i] = G_BUFFER_CLEAR_VAL;
-    }
-    pixelsFilled += WIDTH * HEIGHT;
-}
-
-function display() {
-    window.ctx.putImageData(buffer, 0, 0);
-}
-
-function init() {
-    tris = new Array(1).fill(0).map(
-        () => new Triangle(
-            0, 0, 0,
-            0, 0, 0,
-            0, 0, 0,
-
-            0xFF0000FF,
-            0x00FF00FF,
-            0x0000FFFF
-        )
-    );
-
-    renderTris = new Array(4);
-
-    tris[0].verticesX[2] = 127 + 1;
-    tris[0].verticesY[2] = 27 - 1;
-    tris[0].verticesX[1] = 195 + 1;
-    tris[0].verticesY[1] = 163 - 1;
-    tris[0].verticesX[0] = 59 + 1;
-    tris[0].verticesY[0] = 163 - 1;
-
-    for (let i = 0; i < zBufferAlwaysBlank.length; i++) {
-        zBufferAlwaysBlank[i] = Z_BUFFER_CLEAR_VAL;
-    }
-}
 
 let sinY = 0;
 let cosY = 0;
@@ -982,231 +1212,9 @@ let movementVector = new Vec3();
 
 let lastTime = 0;
 
-function frame(time: DOMHighResTimeStamp) {
-    let deltaTime = time - lastTime;
-    lastTime = time;
-    // let ratio = (Math.sin(time / 1000) + 1) / 2;
-    // let x = lerp(0, 400, ratio);
-
-    // clockwise winding order
-    // tris[0].set(
-    //     96, 64, 0,
-    //     160, 128, 0,
-    //     96, 128, 0,
-
-    //     0xFF7F7FFF,
-    //     0xFF7F7FFF,
-    //     0xFF7F7FFF,
-    // );
-
-    // tris[1].set(
-    //     96, 64, 0,
-    //     160, 64, 0,
-    //     160, 128, 0,
-
-    //     0xFF7F7FFF,
-    //     0xFF7F7FFF,
-    //     0xFF7F7FFF,
-    // );
-
-    // tris[2].set(
-    //     32 + 96, 64, 20,
-    //     32 + 160, 128, 20,
-    //     32 + 96, 128, 20,
-
-    //     0x7FFF7FFF,
-    //     0x7FFF7FFF,
-    //     0x7FFF7FFF,
-    // );
-
-    // tris[3].set(
-    //     32 + 96, 64, 20,
-    //     32 + 160, 64, 20,
-    //     32 + 160, 128, 20,
-
-    //     0x7FFF7FFF,
-    //     0x7FFF7FFF,
-    //     0x7FFF7FFF,
-    // );
-
-    // 79.57741211: 1 rotation per second
-    // let speedMul = 0.5;
-    // // let rad = time / (Math.PI * 2 * 79.57741211 / speedMul);
-
-    sinY = Math.sin(toRadians(cameraRotateY));
-    cosY = Math.cos(toRadians(cameraRotateY));
-    sinX = Math.sin(toRadians(cameraRotateX));
-    cosX = Math.cos(toRadians(cameraRotateX));
-    sinZ = Math.sin(toRadians(cameraRotateZ));
-    cosZ = Math.cos(toRadians(cameraRotateZ));
-
-    movementVector.set(0, 0, 0);
-
-    let moveBy = (deltaTime / 16) * flySpeedMul;
-    if (moveUp) cameraTranslateY += moveBy;
-    if (moveDown) cameraTranslateY -= moveBy;
-    if (moveForward) movementVector.z += moveBy;
-    if (moveBackward) movementVector.z -= moveBy;
-    if (moveLeft) movementVector.x += moveBy;
-    if (moveRight) movementVector.x -= moveBy;
-
-    rotateVecXz(movementVector, sinY, cosY);
-
-    cameraTranslateZ += movementVector.z;
-    cameraTranslateX += movementVector.x;
-
-    moveBy = deltaTime / 8;
-    if (lookLeft) cameraRotateY -= moveBy;
-    if (lookRight) cameraRotateY += moveBy;
-    if (lookDown) cameraRotateX += moveBy;
-    if (lookUp) cameraRotateX -= moveBy;
-
-    // cameraRotateY += moveBy / 40;
-
-    // let triangle0Z = Math.sin(time / (100000 * 10)) * 50;
-    tris[0].verticesZ[0] = triangle0Z;
-    tris[0].verticesZ[1] = triangle0Z;
-    tris[0].verticesZ[2] = triangle0Z;
-    tris[0].material = 12345;
-
-    // let rad = toRadians(parseInt((document.getElementById("slider")! as HTMLInputElement).value)) / (Math.PI * 2);
-    // let sin = Math.sin(rad);
-    // let cos = Math.cos(rad);
-    // rotate(tris[0], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
-    // rotate(tris[1], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
-    // rotate(tris[2], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
-    // rotate(tris[3], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
-    // rotate(tris[2], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
-    // rotate(tris[3], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
-
-    // `[${matrixTruncater(cos)}, ${matrixTruncater(-sin)}]
-    // [${matrixTruncater(sin)}, ${matrixTruncater(cos)}]
-    // debug(`
-    // Pixels filled: ${pixelsFilled}`
-    // );
-
-    clear();
-
-    processTransformations();
-    rasterize();
-    if (ssao) postProcess();
-
-    if (vertexDots) drawDots();
-    if (!pointerCaptured) drawCrosshair();
-
-    display();
-
-    frameCount++;
-
-    if (time >= frameTimeCounterNext) {
-        frameTimeCounterNext += 1000;
-        debug(
-            `FPS: ${frameCount}
-             Lines: ${linesFilled}
-             Tris: ${renderTrisCount}
-             Pixels: ${pixelsFilled}
-             `
-        );
-        frameCount = 0;
-    }
-
-    linesFilled = 0;
-    pixelsFilled = 0;
-}
-
 
 let x = 0;
 let x2 = 0;
-function processTransformations() {
-    renderTrisCount = 0;
-
-    if (normalYFlip) {
-        upVec.y = -1;
-    } else {
-        upVec.y = 1;
-    }
-
-    cameraVec.x = 0;
-    cameraVec.y = 0;
-    cameraVec.z = -1;
-
-    if (rotate) {
-        rotateVecXz(cameraVec, sinY, cosY);
-        rotateVecYz(cameraVec, sinX, cosX);
-        rotateVecXy(cameraVec, sinZ, cosZ);
-    }
-
-    triLoop:
-    for (let i = 0; i < tris.length; i++) {
-        if (renderTris[renderTrisCount] == null) {
-            renderTris[renderTrisCount] = new Triangle();
-        }
-        let preTri = tris[i];
-
-        let renderTri = renderTris[renderTrisCount];
-
-        let ratio = 1;
-        if (normalShading) {
-            normalOfTriangle(preTri, renderTri.normal);
-            tmpVec.copyFrom(renderTri.normal);
-            ratio = angleBetweenVectors(tmpVec, upVec) / Math.PI;
-        }
-
-        for (let j = 0; j < 3; j++) {
-            renderTri.verticesX[j] = preTri.verticesX[j];
-            renderTri.verticesY[j] = preTri.verticesY[j];
-            renderTri.verticesZ[j] = preTri.verticesZ[j];
-
-            renderTri.colors[j] = lerpColor(0x000000FF, preTri.colors[j], ratio);
-        }
-        renderTri.material = preTri.material;
-
-        if (rotate) {
-            rotateTriXz(renderTris[renderTrisCount], HALF_WIDTH - cameraTranslateX, cameraTranslateZ, sinY, cosY);
-            rotateTriYz(renderTris[renderTrisCount], HALF_HEIGHT - cameraTranslateY, cameraTranslateZ, sinX, cosX);
-            rotateTriXy(renderTris[renderTrisCount], HALF_WIDTH, HALF_HEIGHT, sinZ, cosZ);
-        }
-
-        // TODO: Implement frustum culling
-        let xzInsideFrustum = true;
-
-        if (perspectiveTransform) {
-            for (let j = 0; j < 3; j++) {
-                let centeredX = renderTri.verticesX[j] + cameraTranslateX - HALF_WIDTH;
-                let centeredY = renderTri.verticesY[j] + cameraTranslateY - HALF_HEIGHT;
-                let z = renderTri.verticesZ[j] - cameraTranslateZ;
-
-                let finalX = (centeredX / ((z / (zDivisor * RESOLUTION_SCALE)))) + HALF_WIDTH;
-                let finalY = (centeredY / ((z / (zDivisor * RESOLUTION_SCALE)))) + HALF_HEIGHT;
-
-                // If vertex behind clipping plane, skip triangle
-                if (z < NEAR_CLIPPING_PLANE) {
-                    if (finalX < 0 || finalX >= WIDTH || finalY < 0 || finalY >= HEIGHT) {
-                        continue triLoop;
-                    }
-                }
-
-                renderTri.verticesX[j] = finalX | 0;
-                renderTri.verticesY[j] = finalY | 0;
-                renderTri.verticesZ[j] = 1 / z;
-            }
-        } else {
-            for (let j = 0; j < 3; j++) {
-                renderTri.verticesX[j] = (renderTri.verticesX[j] + cameraTranslateX) | 0;
-                renderTri.verticesY[j] = (renderTri.verticesY[j] + cameraTranslateY) | 0;
-            }
-        }
-
-        if (xzInsideFrustum) renderTrisCount++;
-    }
-    x += Math.PI / (144 * 4);
-    x2 += Math.PI / (144);
-}
-
-function frameDriver(time: DOMHighResTimeStamp) {
-    frame(time);
-    requestAnimationFrame(frameDriver);
-}
 
 function lerp(in0: number, in1: number, factor: number) {
     return (1 - factor) * in0 + factor * in1;
@@ -1369,7 +1377,7 @@ class Vec2 {
     }
 }
 
-function parseObjFile(objFile: string) {
+function parseObjFile(objFile: string, xFlip: boolean, yFlip: boolean, zFlip: boolean) {
     let triangleArr: Triangle[] = [];
 
     console.log("Loading OBJ...");
@@ -1437,9 +1445,9 @@ function parseObjFile(objFile: string) {
                 tri.material = materialId;
                 triangleArr.push(tri);
                 for (let j = 0; j < 3; j++) {
-                    tri.verticesX[j] = positionArr[refs[j]].x * (objXFlip ? -1 : 1);
-                    tri.verticesY[j] = positionArr[refs[j]].y * (objYFlip ? -1 : 1);
-                    tri.verticesZ[j] = positionArr[refs[j]].z * (objZFlip ? -1 : 1);
+                    tri.verticesX[j] = positionArr[refs[j]].x * (xFlip ? -1 : 1);
+                    tri.verticesY[j] = positionArr[refs[j]].y * (yFlip ? -1 : 1);
+                    tri.verticesZ[j] = positionArr[refs[j]].z * (zFlip ? -1 : 1);
                 }
             }
         }
@@ -1459,3 +1467,11 @@ function parseObjFile(objFile: string) {
 function parseDec(input: string) {
     return parseInt(input, 10);
 }
+
+window.onload = () => {
+    let infoElement = document.getElementById("info")!;
+    let canvasElement = document.getElementById("canvas")! as HTMLCanvasElement;
+
+    let expoRender = new ExpoRender();
+    expoRender.load(canvasElement, infoElement);
+};
