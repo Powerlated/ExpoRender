@@ -75,6 +75,9 @@ class VertexData {
     y: number = 0;
     z: number = 0;
 
+    u: number = 0;
+    v: number = 0;
+
     color: number = 0;
 }
 
@@ -83,6 +86,9 @@ class Triangle {
     verticesY = new Float64Array(3);
     verticesZ = new Float64Array(3);
 
+    verticesU = new Float64Array(3);
+    verticesV = new Float64Array(3);
+
     colors = new Uint32Array(3);
 
     material = 0;
@@ -90,28 +96,28 @@ class Triangle {
     normal = new Vec3();
 
     constructor(
-        x0: number = 0,
-        y0: number = 0,
-        z0: number = 0,
-        x1: number = 0,
-        y1: number = 0,
-        z1: number = 0,
-        x2: number = 0,
-        y2: number = 0,
-        z2: number = 0,
+        x0 = 0, y0 = 0, z0 = 0, u0 = 0, v0 = 0,
+        x1 = 0, y1 = 0, z1 = 0, u1 = 0, v1 = 0,
+        x2 = 0, y2 = 0, z2 = 0, u2 = 0, v2 = 0,
 
-        color0: number = 0,
-        color1: number = 0,
-        color2: number = 0,
+        color0 = 0,
+        color1 = 0,
+        color2 = 0,
 
-        material: number = 0,
+        material = 0,
     ) {
+        this.verticesU[0] = u0;
+        this.verticesV[0] = v0;
         this.verticesX[0] = x0;
         this.verticesY[0] = y0;
         this.verticesZ[0] = z0;
+        this.verticesU[1] = u1;
+        this.verticesV[1] = v1;
         this.verticesX[1] = x1;
         this.verticesY[1] = y1;
         this.verticesZ[1] = z1;
+        this.verticesU[2] = u2;
+        this.verticesV[2] = v2;
         this.verticesX[2] = x2;
         this.verticesY[2] = y2;
         this.verticesZ[2] = z2;
@@ -124,26 +130,28 @@ class Triangle {
     }
 
     set(
-        x0: number,
-        y0: number,
-        z0: number,
-        x1: number,
-        y1: number,
-        z1: number,
-        x2: number,
-        y2: number,
-        z2: number,
+        x0 = 0, y0 = 0, z0 = 0, u0 = 0, v0 = 0,
+        x1 = 0, y1 = 0, z1 = 0, u1 = 0, v1 = 0,
+        x2 = 0, y2 = 0, z2 = 0, u2 = 0, v2 = 0,
 
-        color0: number,
-        color1: number,
-        color2: number,
+        color0 = 0,
+        color1 = 0,
+        color2 = 0,
+
+        material = 0,
     ) {
+        this.verticesU[0] = u0;
+        this.verticesV[0] = v0;
         this.verticesX[0] = x0;
         this.verticesY[0] = y0;
         this.verticesZ[0] = z0;
+        this.verticesU[1] = u1;
+        this.verticesV[1] = v1;
         this.verticesX[1] = x1;
         this.verticesY[1] = y1;
         this.verticesZ[1] = z1;
+        this.verticesU[2] = u2;
+        this.verticesV[2] = v2;
         this.verticesX[2] = x2;
         this.verticesY[2] = y2;
         this.verticesZ[2] = z2;
@@ -151,6 +159,8 @@ class Triangle {
         this.colors[0] = color0;
         this.colors[1] = color1;
         this.colors[2] = color2;
+
+        this.material = material;
     }
 }
 
@@ -498,15 +508,17 @@ class ExpoRender {
                     this.vertexBuf[v].x = tri.verticesX[v];
                     this.vertexBuf[v].y = tri.verticesY[v];
                     this.vertexBuf[v].z = tri.verticesZ[v];
+                    this.vertexBuf[v].u = tri.verticesU[v];
+                    this.vertexBuf[v].v = tri.verticesV[v];
                     this.vertexBuf[v].color = tri.colors[v];
                 }
 
-                let c00;
-                let c01;
-                let c02;
-                let c10;
-                let c11;
-                let c12;
+                let c00 = 0;
+                let c01 = 0;
+                let c02 = 0;
+                let c10 = 0;
+                let c11 = 0;
+                let c12 = 0;
 
                 // console.log(`${verticesXBuf[0]}, ${verticesXBuf[1]}, ${verticesXBuf[2]}`);
 
@@ -524,17 +536,17 @@ class ExpoRender {
                     i++;
                 }
 
-                let line = bounds(0, HEIGHT, this.vertexBuf[0].y);
-                let endingLine = bounds(0, HEIGHT, this.vertexBuf[2].y);
+                let y = bounds(0, HEIGHT, this.vertexBuf[0].y);
+                let endY = bounds(0, HEIGHT, this.vertexBuf[2].y);
 
-                for (; line < endingLine; line++) {
+                for (; y < endY; y++) {
                     // left edge: 0-1 
                     // right edge: 0-2 
-                    let leftEdge0 = this.vertexBuf[1];
-                    let leftEdge1 = this.vertexBuf[0];
+                    let e0v0 = this.vertexBuf[1];
+                    let e0v1 = this.vertexBuf[0];
 
-                    let rightEdge0 = this.vertexBuf[0];
-                    let rightEdge1 = this.vertexBuf[2];
+                    let e1v0 = this.vertexBuf[0];
+                    let e1v1 = this.vertexBuf[2];
 
                     // if (line == leftEdge0.y) {
                     //     vertexBuf[0].color ^= 0xFFFFFF00;
@@ -542,34 +554,37 @@ class ExpoRender {
                     //     vertexBuf[2].color ^= 0xFFFFFF00;
                     // }
 
-                    if (line >= leftEdge0.y && !(rightEdge1.y == line && leftEdge0.y == line)) {
-                        leftEdge1 = rightEdge1;
+                    if (y >= e0v0.y && !(e1v1.y == y && e0v0.y == y)) {
+                        e0v1 = e1v1;
 
-                        let tmp = leftEdge1;
-                        leftEdge1 = leftEdge0;
-                        leftEdge0 = tmp;
+                        let tmp = e0v1;
+                        e0v1 = e0v0;
+                        e0v0 = tmp;
                     }
 
-                    let leftEdgeHeight = leftEdge1.y - leftEdge0.y;
-                    let rightEdgeHeight = rightEdge1.y - rightEdge0.y;
+                    let e0Height = e0v1.y - e0v0.y;
+                    let e1Height = e1v1.y - e1v0.y;
 
-                    let leftEdgeStartY = min(leftEdge1.y, leftEdge0.y);
-                    let rightEdgeStartY = min(rightEdge1.y, rightEdge0.y);
+                    let e0StartY = min(e0v1.y, e0v0.y);
+                    let e1StartY = min(e1v1.y, e1v0.y);
 
-                    let leftEdgeRelativeY = line - leftEdgeStartY;
-                    let rightEdgeRelativeY = line - rightEdgeStartY;
+                    let e0RelativeY = y - e0StartY;
+                    let e1RelativeY = y - e1StartY;
 
-                    let leftEdgeXRatio = abs(leftEdgeRelativeY / leftEdgeHeight);
-                    let rightEdgeXRatio = abs(rightEdgeRelativeY / rightEdgeHeight);
+                    let e0XRatio = abs(e0RelativeY / e0Height);
+                    let e1XRatio = abs(e1RelativeY / e1Height);
 
-                    let leftEdgeColorLerped = lerpColor(leftEdge1.color, leftEdge0.color, leftEdgeXRatio);
-                    let rightEdgeColorLerped = lerpColor(rightEdge0.color, rightEdge1.color, rightEdgeXRatio);
+                    let e0Lerped = lerp(e0v1.x, e0v0.x, e0XRatio);
+                    let e1Lerped = lerp(e1v0.x, e1v1.x, e1XRatio);
+                    let e0ColorLerped = lerpColor(e0v1.color, e0v0.color, e0XRatio);
+                    let e1ColorLerped = lerpColor(e1v0.color, e1v1.color, e1XRatio);
+                    let e0RecipZLerped = lerp(1 / e0v1.z, 1 / e0v0.z, e0XRatio);
+                    let e1RecipZLerped = lerp(1 / e1v0.z, 1 / e1v1.z, e1XRatio);
 
-                    let leftEdgeZLerped = lerp(leftEdge1.z, leftEdge0.z, leftEdgeXRatio);
-                    let rightEdgeZLerped = lerp(rightEdge0.z, rightEdge1.z, rightEdgeXRatio);
-
-                    let leftEdgeLerped = lerp(leftEdge1.x, leftEdge0.x, leftEdgeXRatio);
-                    let rightEdgeLerped = lerp(rightEdge0.x, rightEdge1.x, rightEdgeXRatio);
+                    let e0ULerpedRecip = lerp(e0v1.u / e0v1.z, e0v0.u / e0v0.z, e0XRatio);
+                    let e1ULerpedRecip = lerp(e1v0.u / e1v0.z, e1v1.u / e1v1.z, e1XRatio);
+                    let e0VLerpedRecip = lerp(e0v1.v / e0v1.z, e0v0.v / e0v0.z, e0XRatio);
+                    let e1VLerpedRecip = lerp(e1v0.v / e1v0.z, e1v1.v / e1v1.z, e1XRatio);
 
                     // debug(`
                     //     L: ${leftEdgeHeight}
@@ -583,75 +598,111 @@ class ExpoRender {
 
                     // If the left is to the right of the right for some reason, swap left and right
                     // (allow arbitrary winding order)
-                    if (leftEdgeLerped >= rightEdgeLerped) {
-                        let tmp = rightEdgeLerped;
-                        rightEdgeLerped = leftEdgeLerped;
-                        leftEdgeLerped = tmp;
+                    if (e0Lerped >= e1Lerped) {
+                        let tmp = e1Lerped;
+                        e1Lerped = e0Lerped;
+                        e0Lerped = tmp;
+                        let tmpColor = e1ColorLerped;
+                        e1ColorLerped = e0ColorLerped;
+                        e0ColorLerped = tmpColor;
+                        let tmpZ = e1RecipZLerped;
+                        e1RecipZLerped = e0RecipZLerped;
+                        e0RecipZLerped = tmpZ;
 
-                        let tmpColor = rightEdgeColorLerped;
-                        rightEdgeColorLerped = leftEdgeColorLerped;
-                        leftEdgeColorLerped = tmpColor;
-
-                        let tmpZ = rightEdgeZLerped;
-                        rightEdgeZLerped = leftEdgeZLerped;
-                        leftEdgeZLerped = tmpZ;
+                        let tmpU = e1ULerpedRecip;
+                        e1ULerpedRecip = e0ULerpedRecip;
+                        e0ULerpedRecip = tmpU;
+                        let tmpV = e1VLerpedRecip;
+                        e1VLerpedRecip = e0VLerpedRecip;
+                        e0VLerpedRecip = tmpV;
                     }
 
-                    c00 = (leftEdgeColorLerped >> 24) & 0xFF;
-                    c01 = (leftEdgeColorLerped >> 16) & 0xFF;
-                    c02 = (leftEdgeColorLerped >> 8) & 0xFF;
-                    c10 = (rightEdgeColorLerped >> 24) & 0xFF;
-                    c11 = (rightEdgeColorLerped >> 16) & 0xFF;
-                    c12 = (rightEdgeColorLerped >> 8) & 0xFF;
+                    c00 = (e0ColorLerped >> 24) & 0xFF;
+                    c01 = (e0ColorLerped >> 16) & 0xFF;
+                    c02 = (e0ColorLerped >> 8) & 0xFF;
+                    c10 = (e1ColorLerped >> 24) & 0xFF;
+                    c11 = (e1ColorLerped >> 16) & 0xFF;
+                    c12 = (e1ColorLerped >> 8) & 0xFF;
 
-                    let lineLengthNoClip = rightEdgeLerped - leftEdgeLerped;
+                    let lineLengthNoClip = e1Lerped - e0Lerped;
 
-                    let z = leftEdgeZLerped;
+                    let recipZ = e0RecipZLerped;
                     let c0 = c00;
                     let c1 = c01;
                     let c2 = c02;
 
-                    let zPerPixel = (rightEdgeZLerped - leftEdgeZLerped) / lineLengthNoClip;
+                    let recipU = e0ULerpedRecip;
+                    let recipV = e0VLerpedRecip;
+
+                    let recipZPerPixel = (e1RecipZLerped - e0RecipZLerped) / lineLengthNoClip;
                     let c0PerPixel = (c10 - c00) / lineLengthNoClip;
                     let c1PerPixel = (c11 - c01) / lineLengthNoClip;
                     let c2PerPixel = (c12 - c02) / lineLengthNoClip;
 
-                    if (leftEdgeLerped < 0) {
-                        z -= zPerPixel * leftEdgeLerped;
-                        c0 -= c0PerPixel * leftEdgeLerped;
-                        c1 -= c1PerPixel * leftEdgeLerped;
-                        c2 -= c2PerPixel * leftEdgeLerped;
+                    let recipUPerPixel = (e1ULerpedRecip - e0ULerpedRecip) / lineLengthNoClip;
+                    let recipVPerPixel = (e1VLerpedRecip - e0VLerpedRecip) / lineLengthNoClip;
 
-                        leftEdgeLerped = 0;
+                    // Adjust starting parameters for left side being off screen
+                    if (e0Lerped < 0) {
+                        recipZ -= recipZPerPixel * e0Lerped;
+                        c0 -= c0PerPixel * e0Lerped;
+                        c1 -= c1PerPixel * e0Lerped;
+                        c2 -= c2PerPixel * e0Lerped;
+
+                        recipU -= recipUPerPixel * e0Lerped;
+                        recipV -= recipVPerPixel * e0Lerped;
+
+                        e0Lerped = 0;
                     }
 
-                    rightEdgeLerped = bounds(0, WIDTH, rightEdgeLerped);
+                    e1Lerped = bounds(0, WIDTH, e1Lerped);
 
-                    let leftEdgeLerpedRounded = leftEdgeLerped | 0;
-                    let rightEdgeLerpedRounded = rightEdgeLerped | 0;
+                    let x = e0Lerped | 0;
+                    let endX = e1Lerped | 0;
 
                     // console.log(`lerped left  X: ${leftEdgeLerped}`)
                     // console.log(`lerped right X: ${rightEdgeLerped}`)
 
-                    let lineLength = rightEdgeLerpedRounded - leftEdgeLerpedRounded;
+                    let lineLength = endX - x;
                     // console.log(`length: ${lineLength}`)
 
                     // pls mr runtime, round down...
-                    let zBase = line * WIDTH + leftEdgeLerpedRounded;
+                    let zBase = y * WIDTH + x;
                     let base = zBase * BYTES_PER_PIXEL;
 
                     if (!this.renderZ) {
-                        for (; leftEdgeLerpedRounded < rightEdgeLerpedRounded; leftEdgeLerpedRounded++) {
-                            if (z >= activeZBuffer[zBase]) {
-                                this.buffer.data[base + 0] = c0; /* R */;
-                                this.buffer.data[base + 1] = c1; /* G */;
-                                this.buffer.data[base + 2] = c2; /* B */;
+                        for (; x < endX; x++) {
+                            if (recipZ >= activeZBuffer[zBase]) {
+                                let fc0 = c0;
+                                let fc1 = c1;
+                                let fc2 = c2;
 
-                                this.zBuffer[zBase] = z;
+                                let correctZ = 1 / recipZ;
+                                let correctU = recipU * correctZ;
+                                let correctV = recipV * correctZ;
+
+                                let addU = 0;
+                                if ((correctV % 16) >= 8) {
+                                    addU = 8;
+                                }
+
+                                if (((correctU + addU) % 16) >= 8) {
+                                    fc0 = (fc0 * 0.5) | 0;
+                                    fc1 = (fc1 * 0.5) | 0;
+                                    fc2 = (fc2 * 0.5) | 0;
+                                }
+
+                                this.buffer.data[base + 0] = fc0; /* R */;
+                                this.buffer.data[base + 1] = fc1; /* G */;
+                                this.buffer.data[base + 2] = fc2; /* B */;
+
+                                this.zBuffer[zBase] = recipZ;
                                 this.gBuffer[zBase] = materialId;
                             }
 
-                            z += zPerPixel;
+                            recipZ += recipZPerPixel;
+                            recipU += recipUPerPixel;
+                            recipV += recipVPerPixel;
                             c0 += c0PerPixel;
                             c1 += c1PerPixel;
                             c2 += c2PerPixel;
@@ -660,9 +711,9 @@ class ExpoRender {
                             zBase += 1;
                         }
                     } else {
-                        for (; leftEdgeLerpedRounded < rightEdgeLerpedRounded; leftEdgeLerpedRounded++) {
-                            if (z >= activeZBuffer[zBase]) {
-                                let renderZ = z;
+                        for (; x < endX; x++) {
+                            if (recipZ >= activeZBuffer[zBase]) {
+                                let renderZ = recipZ;
                                 if (renderZ < this.lowZ) this.lowZ = renderZ;
                                 if (renderZ > this.highZ) this.highZ = renderZ;
                                 renderZ -= this.activeLowZ;
@@ -672,10 +723,10 @@ class ExpoRender {
                                 this.buffer.data[base + 1] = renderZ;
                                 this.buffer.data[base + 2] = renderZ;
 
-                                this.zBuffer[zBase] = z;
+                                this.zBuffer[zBase] = recipZ;
                             }
 
-                            z += zPerPixel;
+                            recipZ += recipZPerPixel;
 
                             base += 4;
                             zBase += 1;
@@ -924,9 +975,9 @@ class ExpoRender {
     init() {
         this.tris = new Array(1).fill(0).map(
             () => new Triangle(
-                0, 0, 0,
-                0, 0, 0,
-                0, 0, 0,
+                0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
 
                 0xFF0000FF,
                 0x00FF00FF,
@@ -942,6 +993,13 @@ class ExpoRender {
         this.tris[0].verticesY[1] = 163 - 1;
         this.tris[0].verticesX[0] = 59 + 1;
         this.tris[0].verticesY[0] = 163 - 1;
+
+        this.tris[0].verticesU[2] = this.tris[0].verticesX[2];
+        this.tris[0].verticesV[2] = this.tris[0].verticesY[2];
+        this.tris[0].verticesU[1] = this.tris[0].verticesX[1];
+        this.tris[0].verticesV[1] = this.tris[0].verticesY[1];
+        this.tris[0].verticesU[0] = this.tris[0].verticesX[0];
+        this.tris[0].verticesV[0] = this.tris[0].verticesY[0];
 
         for (let i = 0; i < this.zBufferAlwaysBlank.length; i++) {
             this.zBufferAlwaysBlank[i] = Z_BUFFER_CLEAR_VAL;
@@ -1143,6 +1201,8 @@ class ExpoRender {
                 renderTri.verticesX[j] = preTri.verticesX[j];
                 renderTri.verticesY[j] = preTri.verticesY[j];
                 renderTri.verticesZ[j] = preTri.verticesZ[j];
+                renderTri.verticesU[j] = preTri.verticesU[j];
+                renderTri.verticesV[j] = preTri.verticesV[j];
 
                 renderTri.colors[j] = lerpColor(0x000000FF, preTri.colors[j], ratio);
             }
@@ -1175,7 +1235,7 @@ class ExpoRender {
 
                     renderTri.verticesX[j] = finalX | 0;
                     renderTri.verticesY[j] = finalY | 0;
-                    renderTri.verticesZ[j] = 1 / z;
+                    renderTri.verticesZ[j] = z;
                 }
             } else {
                 for (let j = 0; j < 3; j++) {
@@ -1473,5 +1533,6 @@ window.onload = () => {
     let canvasElement = document.getElementById("canvas")! as HTMLCanvasElement;
 
     let expoRender = new ExpoRender();
+    (window as any).expoRender = expoRender;
     expoRender.load(canvasElement, infoElement);
 };
