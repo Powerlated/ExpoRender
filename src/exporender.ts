@@ -90,8 +90,11 @@ class Triangle {
     verticesV = new Float64Array(3);
 
     colors = new Uint32Array(3);
+    colorFactor = 1;
 
-    material = 0;
+    materialId = 0;
+    textureId = 0;
+    textured = false;
 
     normal = new Vec3();
 
@@ -126,7 +129,7 @@ class Triangle {
         this.colors[1] = color1;
         this.colors[2] = color2;
 
-        this.material = material;
+        this.materialId = material;
     }
 
     set(
@@ -160,7 +163,7 @@ class Triangle {
         this.colors[1] = color1;
         this.colors[2] = color2;
 
-        this.material = material;
+        this.materialId = material;
     }
 }
 
@@ -272,6 +275,9 @@ class ExpoRender {
     tris: Array<Triangle> = new Array();
     renderTris: Array<Triangle> = new Array();
     renderTrisCount = 0;
+
+    textures: Array<ImageData> = new Array();
+    static missingTexture = ExpoRender.generateMissingTexture();
 
     clearColor = Uint8Array.of(0, 0, 0, 0xFF);
 
@@ -488,6 +494,58 @@ class ExpoRender {
         requestAnimationFrame(this.frameDriver.bind(this));
     };
 
+    fetchTexture(id: number) {
+        if (this.textures[id]) {
+            return this.textures[id];
+        }
+
+        return ExpoRender.missingTexture;
+    }
+
+    loadTextureFromUrl(url: string) {
+        let img = document.createElement('img');
+        img.src = url;
+        img.onload = () => {
+            let canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            let ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0);
+            canvas.remove();
+
+            this.textures.push(ctx.getImageData(0, 0, img.width, img.height));
+        };
+    }
+
+    static generateMissingTexture() {
+        let data = new ImageData(64, 64);
+        let c0 = 0xFF00FFFF;
+        let c1 = 0x000000FF;
+        let index = 0;
+        for (let r = 0; r < 8; r++) {
+            for (let rp = 0; rp < 8; rp++) {
+                for (let b = 0; b < 4; b++) {
+                    for (let p = 0; p < 8; p++) {
+                        data.data[index++] = (c0 >> 24) & 0xFF;
+                        data.data[index++] = (c0 >> 16) & 0xFF;
+                        data.data[index++] = (c0 >> 8) & 0xFF;
+                        data.data[index++] = (c0 >> 0) & 0xFF;
+                    }
+                    for (let p = 0; p < 8; p++) {
+                        data.data[index++] = (c1 >> 24) & 0xFF;
+                        data.data[index++] = (c1 >> 16) & 0xFF;
+                        data.data[index++] = (c1 >> 8) & 0xFF;
+                        data.data[index++] = (c1 >> 0) & 0xFF;
+                    }
+                }
+            }
+            let tmp = c1;
+            c1 = c0;
+            c0 = tmp;
+        }
+
+        return data;
+    }
 
     rasterize() {
         this.activeLowZ = this.lowZ;
@@ -501,7 +559,8 @@ class ExpoRender {
             triLoop:
             for (let t = 0; t < this.renderTrisCount; t++) {
                 let tri = this.renderTris[t];
-                let materialId = tri.material;
+                let materialId = tri.materialId;
+                let texture = this.fetchTexture(tri.textureId);
 
                 for (let v = 0; v < 3; v++) {
                     // Place vertices into temporary buffers
@@ -617,12 +676,12 @@ class ExpoRender {
                         e0VLerpedRecip = tmpV;
                     }
 
-                    c00 = (e0ColorLerped >> 24) & 0xFF;
-                    c01 = (e0ColorLerped >> 16) & 0xFF;
-                    c02 = (e0ColorLerped >> 8) & 0xFF;
-                    c10 = (e1ColorLerped >> 24) & 0xFF;
-                    c11 = (e1ColorLerped >> 16) & 0xFF;
-                    c12 = (e1ColorLerped >> 8) & 0xFF;
+                    c00 = (((e0ColorLerped >> 24) & 0xFF) * tri.colorFactor) | 0;
+                    c01 = (((e0ColorLerped >> 16) & 0xFF) * tri.colorFactor) | 0;
+                    c02 = (((e0ColorLerped >> 8) & 0xFF) * tri.colorFactor) | 0;
+                    c10 = (((e1ColorLerped >> 24) & 0xFF) * tri.colorFactor) | 0;
+                    c11 = (((e1ColorLerped >> 16) & 0xFF) * tri.colorFactor) | 0;
+                    c12 = (((e1ColorLerped >> 8) & 0xFF) * tri.colorFactor) | 0;
 
                     let lineLengthNoClip = e1Lerped - e0Lerped;
 
@@ -682,28 +741,46 @@ class ExpoRender {
                     if (!this.renderZ) {
                         for (; x < endX; x++) {
                             if (recipZ >= activeZBuffer[zBase]) {
-                                let fc0 = c0;
-                                let fc1 = c1;
-                                let fc2 = c2;
+                                if (tri.textured) {
+                                    let correctZ = 1 / recipZ;
+                                    // extend when out of bounds
+                                    let correctU = bounds(0, 1, recipU * correctZ);
+                                    let correctV = bounds(0, 1, recipV * correctZ);
 
-                                let correctZ = 1 / recipZ;
-                                let correctU = recipU * correctZ;
-                                let correctV = recipV * correctZ;
+                                    let pixelU = (correctU * texture.width) | 0;
+                                    let pixelV = (correctV * texture.height) | 0;
 
-                                let addU = 0;
-                                if ((correctV % 16) >= 8) {
-                                    addU = 8;
+                                    // Checkerboard pattern
+                                    // let addU = 0;
+                                    // if ((correctV % 0.2) >= 0.1) {
+                                    //     addU = 0.1;
+                                    // }
+
+                                    // if (((correctU + addU) % 0.2) >= 0.1) {
+                                    //     fc0 = (fc0 * 0.5) | 0;
+                                    //     fc1 = (fc1 * 0.5) | 0;
+                                    //     fc2 = (fc2 * 0.5) | 0;
+                                    // }
+
+                                    // Color interpolation
+                                    // this.buffer.data[base + 0] = fc0; /* R */;
+                                    // this.buffer.data[base + 1] = fc1; /* G */;
+                                    // this.buffer.data[base + 2] = fc2; /* B */;
+
+                                    let texelBase = (pixelV * texture.width + pixelU) * 4;
+                                    let texelR = (texture.data[texelBase + 0] * tri.colorFactor) | 0;
+                                    let texelG = (texture.data[texelBase + 1] * tri.colorFactor) | 0;
+                                    let texelB = (texture.data[texelBase + 2] * tri.colorFactor) | 0;
+
+                                    // Texture fill
+                                    this.buffer.data[base + 0] = texelR; /* R */;
+                                    this.buffer.data[base + 1] = texelG; /* G */;
+                                    this.buffer.data[base + 2] = texelB; /* B */;
+                                } else {
+                                    this.buffer.data[base + 0] = c0; /* R */;
+                                    this.buffer.data[base + 1] = c1; /* G */;
+                                    this.buffer.data[base + 2] = c2; /* B */;
                                 }
-
-                                if (((correctU + addU) % 16) >= 8) {
-                                    fc0 = (fc0 * 0.5) | 0;
-                                    fc1 = (fc1 * 0.5) | 0;
-                                    fc2 = (fc2 * 0.5) | 0;
-                                }
-
-                                this.buffer.data[base + 0] = fc0; /* R */;
-                                this.buffer.data[base + 1] = fc1; /* G */;
-                                this.buffer.data[base + 2] = fc2; /* B */;
 
                                 this.zBuffer[zBase] = recipZ;
                                 this.gBuffer[zBase] = materialId;
@@ -789,8 +866,8 @@ class ExpoRender {
                     // for (let i = 0; i < 3; i++) {
                     //     let subIndex = index;
                     //     for (let j = 0; j < 3; j++) {
-                    //         if (gBuffer[subIndex] != G_BUFFER_CLEAR_VAL) {
-                    //             let depth = zBuffer[subIndex];
+                    //         if (this.gBuffer[subIndex] != G_BUFFER_CLEAR_VAL) {
+                    //             let depth = this.zBuffer[subIndex];
                     //             const threshold = 32;
                     //             let diff = abs(depth - core);
                     //             if (diff > threshold) {
@@ -803,7 +880,6 @@ class ExpoRender {
                     //     }
                     //     index += WIDTH;
                     // }
-
 
                     // Edge marking
                     const materialId = this.gBuffer[p];
@@ -982,7 +1058,8 @@ class ExpoRender {
     }
 
     init() {
-        this.tris = new Array(1).fill(0).map(
+        // my own setup 
+        this.tris = new Array(10).fill(0).map(
             () => new Triangle(
                 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0,
@@ -996,19 +1073,44 @@ class ExpoRender {
 
         this.renderTris = new Array(4);
 
-        this.tris[0].verticesX[2] = 127 + 1;
-        this.tris[0].verticesY[2] = 27 - 1;
-        this.tris[0].verticesX[1] = 195 + 1;
-        this.tris[0].verticesY[1] = 163 - 1;
-        this.tris[0].verticesX[0] = 59 + 1;
-        this.tris[0].verticesY[0] = 163 - 1;
+        // this.tris[0].verticesX[2] = 127 + 1;
+        // this.tris[0].verticesY[2] = 27 - 1;
+        // this.tris[0].verticesX[1] = 195 + 1;
+        // this.tris[0].verticesY[1] = 163 - 1;
+        // this.tris[0].verticesX[0] = 59 + 1;
+        // this.tris[0].verticesY[0] = 163 - 1;
 
-        this.tris[0].verticesU[2] = this.tris[0].verticesX[2];
-        this.tris[0].verticesV[2] = this.tris[0].verticesY[2];
-        this.tris[0].verticesU[1] = this.tris[0].verticesX[1];
-        this.tris[0].verticesV[1] = this.tris[0].verticesY[1];
-        this.tris[0].verticesU[0] = this.tris[0].verticesX[0];
-        this.tris[0].verticesV[0] = this.tris[0].verticesY[0];
+        // this.tris[0].verticesU[2] = this.tris[0].verticesX[2];
+        // this.tris[0].verticesV[2] = this.tris[0].verticesY[2];
+        // this.tris[0].verticesU[1] = this.tris[0].verticesX[1];
+        // this.tris[0].verticesV[1] = this.tris[0].verticesY[1];
+        // this.tris[0].verticesU[0] = this.tris[0].verticesX[0];
+        // this.tris[0].verticesV[0] = this.tris[0].verticesY[0];
+
+        this.tris[0].set(
+            0, 0, 0, 0, 0,
+            63, 0, 0, 1, 0,
+            0, 63, 0, 0, 1,
+
+            0xFF0000FF,
+            0x00FF00FF,
+            0x0000FFFF
+        );
+        this.tris[0].textured = true;
+        this.tris[1].set(
+            63, 63, 0, 1, 1,
+            63, 0, 0, 1, 0,
+            0, 63, 0, 0, 1,
+
+            0xFF0000FF,
+            0x00FF00FF,
+            0x0000FFFF
+        );
+        this.tris[1].textured = true;
+
+        this.loadTextureFromUrl("cubetexture.png");
+
+        // Actual application setup 
 
         for (let i = 0; i < this.zBufferAlwaysBlank.length; i++) {
             this.zBufferAlwaysBlank[i] = Z_BUFFER_CLEAR_VAL;
@@ -1116,7 +1218,8 @@ class ExpoRender {
         this.tris[0].verticesZ[0] = this.triangle0Z;
         this.tris[0].verticesZ[1] = this.triangle0Z;
         this.tris[0].verticesZ[2] = this.triangle0Z;
-        this.tris[0].material = 12345;
+        this.tris[0].materialId = 12345;
+        this.tris[1].materialId = 12345;
 
         // let rad = toRadians(parseInt((document.getElementById("slider")! as HTMLInputElement).value)) / (Math.PI * 2);
         // let sin = Math.sin(rad);
@@ -1199,23 +1302,25 @@ class ExpoRender {
 
             let renderTri = this.renderTris[this.renderTrisCount];
 
-            let ratio = 1;
             if (this.normalShading) {
                 normalOfTriangle(preTri, renderTri.normal);
                 this.tmpVec.copyFrom(renderTri.normal);
-                ratio = angleBetweenVectors(this.tmpVec, this.upVec) / Math.PI;
+                renderTri.colorFactor = angleBetweenVectors(this.tmpVec, this.upVec) / Math.PI;
+            } else {
+                renderTri.colorFactor = 1;
             }
 
             for (let j = 0; j < 3; j++) {
-                renderTri.verticesX[j] = preTri.verticesX[j];
-                renderTri.verticesY[j] = preTri.verticesY[j];
+                renderTri.verticesX[j] = preTri.verticesX[j] + HALF_WIDTH;
+                renderTri.verticesY[j] = preTri.verticesY[j] + HALF_HEIGHT;
                 renderTri.verticesZ[j] = preTri.verticesZ[j];
                 renderTri.verticesU[j] = preTri.verticesU[j];
                 renderTri.verticesV[j] = preTri.verticesV[j];
 
-                renderTri.colors[j] = lerpColor(0x000000FF, preTri.colors[j], ratio);
+                renderTri.colors[j] = preTri.colors[j];
             }
-            renderTri.material = preTri.material;
+            renderTri.textured = preTri.textured;
+            renderTri.materialId = preTri.materialId;
 
             if (this.rotate) {
                 rotateTriXz(this.renderTris[this.renderTrisCount], HALF_WIDTH - this.cameraTranslateX, this.cameraTranslateZ, sinY, cosY);
@@ -1511,7 +1616,8 @@ function parseObjFile(objFile: string, xFlip: boolean, yFlip: boolean, zFlip: bo
                 tri.colors[0] = color;
                 tri.colors[1] = color;
                 tri.colors[2] = color;
-                tri.material = materialId;
+                tri.materialId = materialId;
+                tri.textured = false;
                 triangleArr.push(tri);
                 for (let j = 0; j < 3; j++) {
                     tri.verticesX[j] = positionArr[refs[j]].x * (xFlip ? -1 : 1);
