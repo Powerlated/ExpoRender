@@ -655,6 +655,15 @@ class ExpoRender {
                         e0Lerped = 0;
                     }
 
+                    // Align to screen space integers
+                    recipZ -= recipZPerPixel * (e0Lerped % 1);
+                    c0 -= c0PerPixel * (e0Lerped % 1);
+                    c1 -= c1PerPixel * (e0Lerped % 1);
+                    c2 -= c2PerPixel * (e0Lerped % 1);
+
+                    recipU -= recipUPerPixel * (e0Lerped % 1);
+                    recipV -= recipVPerPixel * (e0Lerped % 1);
+
                     e1Lerped = bounds(0, WIDTH, e1Lerped);
 
                     let x = e0Lerped | 0;
