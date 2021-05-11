@@ -168,6 +168,24 @@ class Triangle {
         this.textureId = textureId;
         this.materialId = materialId;
     }
+
+    invertNormal() {
+        let u = this.verticesU[0];
+        let v = this.verticesV[0];
+        let x = this.verticesX[0];
+        let y = this.verticesY[0];
+        let z = this.verticesZ[0];
+        this.verticesU[0] = this.verticesU[1];
+        this.verticesV[0] = this.verticesV[1];
+        this.verticesX[0] = this.verticesX[1];
+        this.verticesY[0] = this.verticesY[1];
+        this.verticesZ[0] = this.verticesZ[1];
+        this.verticesU[1] = u;
+        this.verticesV[1] = v;
+        this.verticesX[1] = x;
+        this.verticesY[1] = y;
+        this.verticesZ[1] = z;
+    }
 }
 
 let tmpVec0 = new Vec3();
@@ -236,6 +254,11 @@ const G_BUFFER_CLEAR_VAL = 4294967295;
 const Z_BUFFER_CLEAR_VAL = 0;
 
 class ExpoRender {
+    debugMode = true;
+
+    canvas?: HTMLCanvasElement;
+    ctx?: CanvasRenderingContext2D;
+
     normalShading = false;
 
     crossVertIndex = 0;
@@ -282,7 +305,7 @@ class ExpoRender {
     textures: Array<ImageData> = new Array();
     static missingTexture = ExpoRender.generateMissingTexture();
 
-    clearColor = Uint8Array.of(0, 0, 0, 0xFF);
+    clearColor = 0x222222FF;
 
     pixelsFilled = 0;
     linesFilled = 0;
@@ -298,9 +321,9 @@ class ExpoRender {
 
     cameraVec = new Vec3();
 
-    globalRotateX = 0;
-    globalRotateY = 0;
-    globalRotateZ = 0;
+    worldRotateX = 0;
+    worldRotateY = 0;
+    worldRotateZ = 0;
 
     ssao = true;
     vertexDots = false;
@@ -338,23 +361,137 @@ class ExpoRender {
             }
         };
 
+        this.canvas = canvasElement;
+        this.ctx = canvasElement.getContext("2d")!;
+        if (this.ctx) {
+            console.log("Hello ExpoRender!");
+        } else {
+            console.log("Couldn't load 2D context");
+        }
+
+        if (this.debugMode) {
+            document.getElementById("rotate")!.onclick = e => { this.rotate = (e as any).target.checked; };
+            document.getElementById("fill")!.onclick = e => { this.fill = (e as any).target.checked; };
+            document.getElementById("wireframe")!.onclick = e => { this.wireframe = (e as any).target.checked; };
+            document.getElementById("render-z")!.onclick = e => { this.renderZ = (e as any).target.checked; };
+            document.getElementById("depth-test")!.onclick = e => { this.depthTest = (e as any).target.checked; };
+            document.getElementById("ssao")!.onclick = e => { this.ssao = (e as any).target.checked; };
+            document.getElementById("perspective-transform")!.onclick = e => { this.perspectiveTransform = (e as any).target.checked; };
+            document.getElementById("normal-shading")!.onclick = e => { this.normalShading = (e as any).target.checked; };
+            document.getElementById("triangle-0-z")!.oninput = e => { this.triangle0Z = parseInt((e as any).target.value); };
+            document.getElementById("x-slider")!.oninput = e => { this.cameraTranslateX = parseInt((e as any).target.value); };
+            document.getElementById("y-slider")!.oninput = e => { this.cameraTranslateY = parseInt((e as any).target.value); };
+            document.getElementById("z-slider")!.oninput = e => { this.cameraTranslateZ = parseInt((e as any).target.value); };
+            document.getElementById("x-rotation")!.oninput = e => { this.worldRotateX = parseInt((e as any).target.value); };
+            document.getElementById("y-rotation")!.oninput = e => { this.worldRotateY = parseInt((e as any).target.value); };
+            document.getElementById("z-rotation")!.oninput = e => { this.worldRotateZ = parseInt((e as any).target.value); };
+            document.getElementById("vertex-dots")!.onclick = e => { this.vertexDots = (e as any).target.checked; };
+            document.getElementById("obj-x-flip")!.onclick = e => { this.objXFlip = (e as any).target.checked; };
+            document.getElementById("obj-y-flip")!.onclick = e => { this.objYFlip = (e as any).target.checked; };
+            document.getElementById("obj-z-flip")!.onclick = e => { this.objZFlip = (e as any).target.checked; };
+            document.getElementById("normal-y-flip")!.onclick = e => { this.normalYFlip = (e as any).target.checked; };
+
+            this.rotate = (document.getElementById("rotate") as any).checked;
+            this.fill = (document.getElementById("fill") as any).checked;
+            this.wireframe = (document.getElementById("wireframe") as any).checked;
+            this.renderZ = (document.getElementById("render-z") as any).checked;
+            this.depthTest = (document.getElementById("depth-test") as any).checked;
+            this.ssao = (document.getElementById("ssao") as any).checked;
+            this.perspectiveTransform = (document.getElementById("perspective-transform") as any).checked;
+            this.normalShading = (document.getElementById("normal-shading") as any).checked;
+            this.triangle0Z = parseInt((document.getElementById("triangle-0-z") as any).value);
+            this.cameraTranslateX = parseInt((document.getElementById("x-slider") as any).value);
+            this.cameraTranslateY = parseInt((document.getElementById("y-slider") as any).value);
+            this.cameraTranslateZ = parseInt((document.getElementById("z-slider") as any).value);
+
+            document.onpointerlockchange = () => {
+                this.pointerCaptured = document.pointerLockElement == canvasElement;
+            };
+
+            document.addEventListener("wheel", e => {
+                if (this.pointerCaptured) {
+                    this.flySpeedMul += -e.deltaY / 250;
+                    this.flySpeedMul = bounds(0, 10, this.flySpeedMul);
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            let keyEvent = (key: string, val: boolean) => {
+                switch (key) {
+                    case "KeyE": this.moveUp = val; break;
+                    case "KeyQ": this.moveDown = val; break;
+                    case "KeyW": this.moveForward = val; break;
+                    case "KeyS": this.moveBackward = val; break;
+                    case "KeyA": this.moveLeft = val; break;
+                    case "KeyD": this.moveRight = val; break;
+                    case "ArrowLeft": this.lookLeft = val; break;
+                    case "ArrowRight": this.lookRight = val; break;
+                    case "ArrowUp": this.lookUp = val; break;
+                    case "ArrowDown": this.lookDown = val; break;
+                    case "ShiftLeft": this.shiftLeft = val; break;
+                }
+            };
+
+            let block = ["KeyQ", "KeyE", "KeyW", "KeyS", "KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "ShiftLeft", "Backquote"];
+
+            document.onkeydown = e => {
+                if (block.includes(e.key)) {
+                    e.preventDefault();
+                }
+
+                switch (e.code) {
+                    case "Backquote":
+                        if (this.shiftLeft) {
+                            canvasElement.requestPointerLock();
+                        }
+                        break;
+                }
+
+                keyEvent(e.code, true);
+            };
+            document.onkeyup = e => {
+                if (block.includes(e.key)) {
+                    e.preventDefault();
+                }
+
+                keyEvent(e.code, false);
+            };
+
+            let dropHandler = (ev: Event | any) => {
+                let expoRender = this;
+                if (ev.dataTransfer.files[0] instanceof Blob) {
+                    console.log("File(s) dropped");
+
+                    ev.preventDefault();
+
+                    let reader = new FileReader();
+                    reader.onload = function () {
+                        if (this.result instanceof ArrayBuffer) {
+                            let dec = new TextDecoder("utf-8");
+                            let newTris = parseObjFile(dec.decode(new Uint8Array(this.result)), expoRender.objXFlip, expoRender.objYFlip, expoRender.objZFlip);
+
+                            for (let i = 0; i < newTris.length; i++) {
+                                expoRender.tris.push(newTris[i]);
+                            }
+                        }
+                    };
+                    reader.readAsArrayBuffer(ev.dataTransfer.files[0]);
+                }
+            };
+
+            let dragoverHandler = (ev: Event | any) => {
+                ev.preventDefault();
+            };
+
+            window.addEventListener("drop", dropHandler);
+            window.addEventListener("dragover", dragoverHandler);
+        }
+
         canvasElement.width = WIDTH;
         canvasElement.height = HEIGHT;
-        canvasElement.style.width = (WIDTH * SCREEN_SCALE).toString();
-        canvasElement.style.height = (HEIGHT * SCREEN_SCALE).toString();
-
-        document.onpointerlockchange = () => {
-            this.pointerCaptured = document.pointerLockElement == canvasElement;
-        };
-
-        document.addEventListener("wheel", e => {
-            if (this.pointerCaptured) {
-                this.flySpeedMul += -e.deltaY / 250;
-                this.flySpeedMul = bounds(0, 10, this.flySpeedMul);
-                e.preventDefault();
-            }
-        }, { passive: false });
-
+        canvasElement.style.width = (WIDTH * SCREEN_SCALE).toString() + "px";
+        canvasElement.style.height = (HEIGHT * SCREEN_SCALE).toString() + "px";
+        canvasElement.style.imageRendering = "pixelated";
         canvasElement.style.cursor = "none";
         canvasElement.onmousemove = (evt) => {
             if (this.pointerCaptured) {
@@ -371,131 +508,35 @@ class ExpoRender {
                 this.crossX = ((evt.clientX - rect.left) / ratio) | 0;
                 this.crossY = ((evt.clientY - rect.top) / ratio) | 0;
 
-                infoElement.innerText = `
-                Pos X: ${this.crossX}
-                Pos Y: ${this.crossY}
-        
-                Set Vertex ${this.crossVertIndex}
-                `;
+                if (this.debugMode) {
+                    infoElement.innerText = `
+            Pos X: ${this.crossX}
+            Pos Y: ${this.crossY}
+    
+            Set Vertex ${this.crossVertIndex}
+            `;
+                }
             }
         };
-
-        let keyEvent = (key: string, val: boolean) => {
-            switch (key) {
-                case "KeyE": this.moveUp = val; break;
-                case "KeyQ": this.moveDown = val; break;
-                case "KeyW": this.moveForward = val; break;
-                case "KeyS": this.moveBackward = val; break;
-                case "KeyA": this.moveLeft = val; break;
-                case "KeyD": this.moveRight = val; break;
-                case "ArrowLeft": this.lookLeft = val; break;
-                case "ArrowRight": this.lookRight = val; break;
-                case "ArrowUp": this.lookUp = val; break;
-                case "ArrowDown": this.lookDown = val; break;
-                case "ShiftLeft": this.shiftLeft = val; break;
-            }
-        };
-
-        let block = ["KeyQ", "KeyE", "KeyW", "KeyS", "KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "ShiftLeft", "Backquote"];
-
-        document.onkeydown = e => {
-            if (block.includes(e.key)) {
-                e.preventDefault();
-            }
-
-            switch (e.code) {
-                case "Backquote":
-                    if (this.shiftLeft) {
-                        canvasElement.requestPointerLock();
-                    }
-                    break;
-            }
-
-            keyEvent(e.code, true);
-        };
-        document.onkeyup = e => {
-            if (block.includes(e.key)) {
-                e.preventDefault();
-            }
-
-            keyEvent(e.code, false);
-        };
-
-        let dropHandler = (ev: Event | any) => {
-            let expoRender = this;
-            if (ev.dataTransfer.files[0] instanceof Blob) {
-                console.log("File(s) dropped");
-
-                ev.preventDefault();
-
-                let reader = new FileReader();
-                reader.onload = function () {
-                    if (this.result instanceof ArrayBuffer) {
-                        let dec = new TextDecoder("utf-8");
-                        let newTris = parseObjFile(dec.decode(new Uint8Array(this.result)), expoRender.objXFlip, expoRender.objYFlip, expoRender.objZFlip);
-
-                        for (let i = 0; i < newTris.length; i++) {
-                            expoRender.tris.push(newTris[i]);
-                        }
-                    }
-                };
-                reader.readAsArrayBuffer(ev.dataTransfer.files[0]);
-            }
-        };
-
-        function dragoverHandler(ev: Event | any) {
-            ev.preventDefault();
-        }
-
-        window.addEventListener("drop", dropHandler);
-        window.addEventListener("dragover", dragoverHandler);
-
-        window.canvas = document.getElementById("canvas") as HTMLCanvasElement;
-        window.ctx = window.canvas.getContext("2d")!;
-        if (window.canvas) {
-            console.log("Hello ExpoRender!");
-        } else {
-            console.log("Couldn't load canvas");
-        }
-
-        document.getElementById("rotate")!.onclick = e => { this.rotate = (e as any).target.checked; };
-        document.getElementById("fill")!.onclick = e => { this.fill = (e as any).target.checked; };
-        document.getElementById("wireframe")!.onclick = e => { this.wireframe = (e as any).target.checked; };
-        document.getElementById("render-z")!.onclick = e => { this.renderZ = (e as any).target.checked; };
-        document.getElementById("depth-test")!.onclick = e => { this.depthTest = (e as any).target.checked; };
-        document.getElementById("ssao")!.onclick = e => { this.ssao = (e as any).target.checked; };
-        document.getElementById("perspective-transform")!.onclick = e => { this.perspectiveTransform = (e as any).target.checked; };
-        document.getElementById("normal-shading")!.onclick = e => { this.normalShading = (e as any).target.checked; };
-        document.getElementById("triangle-0-z")!.oninput = e => { this.triangle0Z = parseInt((e as any).target.value); };
-        document.getElementById("x-slider")!.oninput = e => { this.cameraTranslateX = parseInt((e as any).target.value); };
-        document.getElementById("y-slider")!.oninput = e => { this.cameraTranslateY = parseInt((e as any).target.value); };
-        document.getElementById("z-slider")!.oninput = e => { this.cameraTranslateZ = parseInt((e as any).target.value); };
-        document.getElementById("x-rotation")!.oninput = e => { this.globalRotateX = parseInt((e as any).target.value); };
-        document.getElementById("y-rotation")!.oninput = e => { this.globalRotateY = parseInt((e as any).target.value); };
-        document.getElementById("z-rotation")!.oninput = e => { this.globalRotateZ = parseInt((e as any).target.value); };
-        document.getElementById("vertex-dots")!.onclick = e => { this.vertexDots = (e as any).target.checked; };
-        document.getElementById("obj-x-flip")!.onclick = e => { this.objXFlip = (e as any).target.checked; };
-        document.getElementById("obj-y-flip")!.onclick = e => { this.objYFlip = (e as any).target.checked; };
-        document.getElementById("obj-z-flip")!.onclick = e => { this.objZFlip = (e as any).target.checked; };
-        document.getElementById("normal-y-flip")!.onclick = e => { this.normalYFlip = (e as any).target.checked; };
-
-        this.rotate = (document.getElementById("rotate") as any).checked;
-        this.fill = (document.getElementById("fill") as any).checked;
-        this.wireframe = (document.getElementById("wireframe") as any).checked;
-        this.renderZ = (document.getElementById("render-z") as any).checked;
-        this.depthTest = (document.getElementById("depth-test") as any).checked;
-        this.ssao = (document.getElementById("ssao") as any).checked;
-        this.perspectiveTransform = (document.getElementById("perspective-transform") as any).checked;
-        this.normalShading = (document.getElementById("normal-shading") as any).checked;
-        this.triangle0Z = parseInt((document.getElementById("triangle-0-z") as any).value);
-        this.cameraTranslateX = parseInt((document.getElementById("x-slider") as any).value);
-        this.cameraTranslateY = parseInt((document.getElementById("y-slider") as any).value);
-        this.cameraTranslateZ = parseInt((document.getElementById("z-slider") as any).value);
 
         this.init();
 
-        requestAnimationFrame(this.frameDriver.bind(this));
+        if (this.debugMode) {
+            requestAnimationFrame(this.frameDriver.bind(this));
+        }
     };
+
+    loadTexture(id: number, width: number, height: number, data: Uint8Array) {
+        if (id == 0) return;
+
+        let imageData = new ImageData(width, height);
+        for (let i = 0; i < data.length; i++) {
+            imageData.data[i] = data[i];
+        }
+        this.textures[id - 1] = imageData;
+
+        console.log("load tex");
+    }
 
     fetchTexture(id: number) {
         if (this.textures[id - 1]) {
@@ -737,12 +778,12 @@ class ExpoRender {
                             if (recipZ >= activeZBuffer[zBase]) {
                                 if (tri.textureId != 0) {
                                     let correctZ = 1 / recipZ;
-                                    // extend when out of bounds
-                                    let correctU = bounds(0, 1, recipU * correctZ);
-                                    let correctV = bounds(0, 1, recipV * correctZ);
+                                    let correctU = recipU * correctZ;
+                                    let correctV = recipV * correctZ;
 
-                                    let pixelU = (correctU * texture.width) | 0;
-                                    let pixelV = (correctV * texture.height) | 0;
+                                    // extend when out of bounds
+                                    let pixelU = abs(((correctU * texture.width) | 0) % texture.width);
+                                    let pixelV = abs(((correctV * texture.height) | 0) % texture.height);
 
                                     let texelBase = (pixelV * texture.width + pixelU) * 4;
                                     let texelR = (texture.data[texelBase + 0] * tri.colorFactor) | 0;
@@ -1054,7 +1095,7 @@ class ExpoRender {
             0, 0, 0, 64, 0xFFFFFFFF, 1
         );
 
-        this.loadTextureFromUrl("screenie.png");
+        this.loadTextureFromUrl("cubetexture.png");
 
         // Actual application setup 
         for (let i = 0; i < this.zBufferAlwaysBlank.length; i++) {
@@ -1066,58 +1107,72 @@ class ExpoRender {
         let hSize = size / 2; // half size
         let mul = 1;
         let cMul = 1; // right triangle corner 
-        this.normalShading = false;
-        // for (let a = 0; a < 3; a++) {
-            for (let f = 0; f < 2; f++) {
-                for (let t = 0; t < 2; t++) {
-                    this.tris.push(new Triangle(
-                        x + hSize * cMul, y + hSize * cMul, z + hSize * mul, t, t,
-                        x - hSize, y + hSize, z + hSize * mul, 0, 1,
-                        x + hSize, y - hSize, z + hSize * mul, 1, 0,
+        for (let f = 0; f < 2; f++) {
+            for (let t = 0; t < 2; t++) {
+                let t0 = new Triangle(
+                    x + hSize * cMul, y + hSize * cMul, z + hSize * mul, t, t,
+                    x - hSize, y + hSize, z + hSize * mul, 0, 1,
+                    x + hSize, y - hSize, z + hSize * mul, 1, 0,
 
-                        color,
-                        color,
-                        color,
+                    color,
+                    color,
+                    color,
 
-                        textureId
-                    ));
-                    this.tris.push(new Triangle(
-                        z + hSize * mul, x + hSize * cMul, y + hSize * cMul, t, t,
-                        z + hSize * mul, x - hSize, y + hSize, 0, 1,
-                        z + hSize * mul, x + hSize, y - hSize, 1, 0,
+                    textureId
+                );
+                let t1 = new Triangle(
+                    z + hSize * mul, x + hSize * cMul, y + hSize * cMul, t, t,
+                    z + hSize * mul, x - hSize, y + hSize, 0, 1,
+                    z + hSize * mul, x + hSize, y - hSize, 1, 0,
 
-                        color,
-                        color,
-                        color,
+                    color,
+                    color,
+                    color,
 
-                        textureId
-                    ));
-                    this.tris.push(new Triangle(
-                        x + hSize * cMul, z + hSize * mul,y + hSize * cMul, t, t,
-                        x - hSize,z + hSize * mul, y + hSize, 0, 1,
-                        x + hSize,z + hSize * mul, y - hSize, 1, 0,
+                    textureId
+                );
+                let t2 = new Triangle(
+                    x - hSize, z + hSize * mul, y + hSize, 0, 1,
+                    x + hSize * cMul, z + hSize * mul, y + hSize * cMul, t, t,
+                    x + hSize, z + hSize * mul, y - hSize, 1, 0,
 
-                        color,
-                        color,
-                        color,
+                    color,
+                    color,
+                    color,
 
-                        textureId
-                    ));
+                    textureId
+                );
 
-
-                    cMul *= -1;
+                // idk how to work out the proper winding order for cube tris so I'll just hack it like this 
+                if (t == 0) {
+                    t0.invertNormal();
+                    t1.invertNormal();
+                    t2.invertNormal();
+                }
+                if (f == 0) {
+                    t0.invertNormal();
+                    t1.invertNormal();
+                    t2.invertNormal();
                 }
 
-                mul *= -1;
+                this.tris.push(t0);
+                this.tris.push(t1);
+                this.tris.push(t2);
+
+                cMul *= -1;
             }
+
+            mul *= -1;
         }
-    // }
+    }
 
     clear() {
         let pos = 0;
         for (let i = 0; i < WIDTH * HEIGHT; i++) {
+            let c = this.clearColor;
             for (let j = 0; j < BYTES_PER_PIXEL; j++) {
-                this.buffer.data[pos++] = this.clearColor[j];
+                this.buffer.data[pos++] = (c >> 24) & 0xFF;
+                c <<= 8;
             }
             this.zBuffer[i] = Z_BUFFER_CLEAR_VAL;
             this.gBuffer[i] = G_BUFFER_CLEAR_VAL;
@@ -1126,19 +1181,19 @@ class ExpoRender {
     }
 
     display() {
-        window.ctx.putImageData(this.buffer, 0, 0);
+        this.ctx?.putImageData(this.buffer, 0, 0);
     }
 
     frame(time: DOMHighResTimeStamp) {
         let deltaTime = time - lastTime;
         lastTime = time;
 
-        sinY = Math.sin(toRadians(this.cameraRotateY));
-        cosY = Math.cos(toRadians(this.cameraRotateY));
-        sinX = Math.sin(toRadians(this.cameraRotateX));
-        cosX = Math.cos(toRadians(this.cameraRotateX));
-        sinZ = Math.sin(toRadians(this.cameraRotateZ));
-        cosZ = Math.cos(toRadians(this.cameraRotateZ));
+        cameraSinY = Math.sin(toRadians(this.cameraRotateY));
+        cameraCosY = Math.cos(toRadians(this.cameraRotateY));
+        cameraSinX = Math.sin(toRadians(this.cameraRotateX));
+        cameraCosX = Math.cos(toRadians(this.cameraRotateX));
+        cameraSinZ = Math.sin(toRadians(this.cameraRotateZ));
+        cameraCosZ = Math.cos(toRadians(this.cameraRotateZ));
 
         movementVector.set(0, 0, 0);
 
@@ -1150,10 +1205,13 @@ class ExpoRender {
         if (this.moveLeft) movementVector.x += moveBy;
         if (this.moveRight) movementVector.x -= moveBy;
 
-        rotateVecXz(movementVector, sinY, cosY);
+        rotateVecXz(movementVector, cameraSinY, cameraCosY);
 
         this.cameraTranslateZ += movementVector.z;
         this.cameraTranslateX += movementVector.x;
+
+        this.worldRotateX += deltaTime / 16;
+        this.worldRotateZ += deltaTime / 16;
 
         moveBy = deltaTime / 8;
         if (this.lookLeft) this.cameraRotateY -= moveBy;
@@ -1182,8 +1240,9 @@ class ExpoRender {
 
         if (time >= this.frameTimeCounterNext) {
             this.frameTimeCounterNext += 1000;
-            debug(
-                `FPS: ${this.frameCount}
+            if (this.debugMode) {
+                debug(
+                    `FPS: ${this.frameCount}
                  Lines: ${this.linesFilled}
                  Tris: ${this.renderTrisCount}
                  Pixels: ${this.pixelsFilled}
@@ -1196,7 +1255,8 @@ class ExpoRender {
                  Rotate Y: ${this.cameraRotateY}
                  Rotate Z: ${this.cameraRotateZ}
                  `
-            );
+                );
+            }
             this.frameCount = 0;
         }
 
@@ -1206,6 +1266,13 @@ class ExpoRender {
 
     processTransformations() {
         this.renderTrisCount = 0;
+
+        let worldSinY = Math.sin(toRadians(this.worldRotateY));
+        let worldCosY = Math.cos(toRadians(this.worldRotateY));
+        let worldSinX = Math.sin(toRadians(this.worldRotateX));
+        let worldCosX = Math.cos(toRadians(this.worldRotateX));
+        let worldSinZ = Math.sin(toRadians(this.worldRotateZ));
+        let worldCosZ = Math.cos(toRadians(this.worldRotateZ));
 
         if (this.normalYFlip) {
             this.upVec.y = -1;
@@ -1218,9 +1285,9 @@ class ExpoRender {
         this.cameraVec.z = -1;
 
         if (this.rotate) {
-            rotateVecXz(this.cameraVec, sinY, cosY);
-            rotateVecYz(this.cameraVec, sinX, cosX);
-            rotateVecXy(this.cameraVec, sinZ, cosZ);
+            rotateVecXz(this.cameraVec, cameraSinY, cameraCosY);
+            rotateVecYz(this.cameraVec, cameraSinX, cameraCosX);
+            rotateVecXy(this.cameraVec, cameraSinZ, cameraCosZ);
         }
 
         triLoop:
@@ -1232,17 +1299,9 @@ class ExpoRender {
 
             let renderTri = this.renderTris[this.renderTrisCount];
 
-            if (this.normalShading) {
-                normalOfTriangle(preTri, renderTri.normal);
-                this.tmpVec.copyFrom(renderTri.normal);
-                renderTri.colorFactor = angleBetweenVectors(this.tmpVec, this.upVec) / Math.PI;
-            } else {
-                renderTri.colorFactor = 1;
-            }
-
             for (let j = 0; j < 3; j++) {
-                renderTri.verticesX[j] = preTri.verticesX[j] + HALF_WIDTH;
-                renderTri.verticesY[j] = preTri.verticesY[j] + HALF_HEIGHT;
+                renderTri.verticesX[j] = preTri.verticesX[j];
+                renderTri.verticesY[j] = preTri.verticesY[j];
                 renderTri.verticesZ[j] = preTri.verticesZ[j];
                 renderTri.verticesU[j] = preTri.verticesU[j];
                 renderTri.verticesV[j] = preTri.verticesV[j];
@@ -1253,15 +1312,34 @@ class ExpoRender {
             renderTri.materialId = preTri.materialId;
 
             if (this.rotate) {
-                rotateTriXz(this.renderTris[this.renderTrisCount], HALF_WIDTH - this.cameraTranslateX, this.cameraTranslateZ, sinY, cosY);
-                rotateTriYz(this.renderTris[this.renderTrisCount], HALF_HEIGHT - this.cameraTranslateY, this.cameraTranslateZ, sinX, cosX);
-                rotateTriXy(this.renderTris[this.renderTrisCount], HALF_WIDTH, HALF_HEIGHT, sinZ, cosZ);
+                rotateTriXz(this.renderTris[this.renderTrisCount], 0, 0, worldSinY, worldCosY);
+                rotateTriYz(this.renderTris[this.renderTrisCount], 0, 0, worldSinX, worldCosX);
+                rotateTriXy(this.renderTris[this.renderTrisCount], 0, 0, worldSinZ, worldCosZ);
+            }
+
+            if (this.normalShading) {
+                normalOfTriangle(renderTri, renderTri.normal);
+                this.tmpVec.copyFrom(renderTri.normal);
+                renderTri.colorFactor = angleBetweenVectors(this.tmpVec, this.upVec) / Math.PI;
+            } else {
+                renderTri.colorFactor = 1;
+            }
+
+            for (let j = 0; j < 3; j++) {
+                renderTri.verticesX[j] += HALF_WIDTH;
+                renderTri.verticesY[j] += HALF_HEIGHT;
+            }
+
+            if (this.rotate) {
+                rotateTriXz(this.renderTris[this.renderTrisCount], HALF_WIDTH - this.cameraTranslateX, this.cameraTranslateZ, cameraSinY, cameraCosY);
+                rotateTriYz(this.renderTris[this.renderTrisCount], HALF_HEIGHT - this.cameraTranslateY, this.cameraTranslateZ, cameraSinX, cameraCosX);
+                rotateTriXy(this.renderTris[this.renderTrisCount], HALF_WIDTH, HALF_HEIGHT, cameraSinZ, cameraCosZ);
             }
 
             // TODO: Implement frustum culling
             let xzInsideFrustum = true;
 
-            if (this.perspectiveTransform) {
+            if (this.perspectiveTransform && true) {
                 for (let j = 0; j < 3; j++) {
                     let centeredX = renderTri.verticesX[j] + this.cameraTranslateX - HALF_WIDTH;
                     let centeredY = renderTri.verticesY[j] + this.cameraTranslateY - HALF_HEIGHT;
@@ -1298,6 +1376,40 @@ class ExpoRender {
         this.frame(time);
         requestAnimationFrame(this.frameDriver.bind(this));
     }
+
+    clearTris() {
+        this.tris = new Array();
+    }
+
+    addTri(
+        x0 = 0, y0 = 0, z0 = 0, u0 = 0, v0 = 0,
+        x1 = 0, y1 = 0, z1 = 0, u1 = 0, v1 = 0,
+        x2 = 0, y2 = 0, z2 = 0, u2 = 0, v2 = 0,
+
+        color0 = 0,
+        color1 = 0,
+        color2 = 0,
+
+        textureId = 0,
+        materialId = 0,
+    ) {
+        this.tris.push(new Triangle(
+            x0, y0, z0, u0, v0,
+            x1, y1, z1, u1, v1,
+            x2, y2, z2, u2, v2,
+
+            color0,
+            color1,
+            color2,
+
+            textureId,
+            materialId,
+        ));
+    }
+
+    addTriObject(tri: Triangle) {
+        this.tris.push(tri);
+    }
 }
 
 let a = 1;
@@ -1305,12 +1417,12 @@ let b = 0.5;
 
 let col = 0x000000FF;
 
-let sinY = 0;
-let cosY = 0;
-let sinX = 0;
-let cosX = 0;
-let sinZ = 0;
-let cosZ = 0;
+let cameraSinY = 0;
+let cameraCosY = 0;
+let cameraSinX = 0;
+let cameraCosX = 0;
+let cameraSinZ = 0;
+let cameraCosZ = 0;
 
 let movementVector = new Vec3();
 
