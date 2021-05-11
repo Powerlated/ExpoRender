@@ -93,8 +93,7 @@ class Triangle {
     colorFactor = 1;
 
     materialId = 0;
-    textureId = 0;
-    textured = false;
+    textureId = 0; // nonzero = textured
 
     normal = new Vec3();
 
@@ -107,7 +106,8 @@ class Triangle {
         color1 = 0,
         color2 = 0,
 
-        material = 0,
+        textureId = 0,
+        materialId = 0,
     ) {
         this.verticesU[0] = u0;
         this.verticesV[0] = v0;
@@ -129,7 +129,8 @@ class Triangle {
         this.colors[1] = color1;
         this.colors[2] = color2;
 
-        this.materialId = material;
+        this.textureId = textureId;
+        this.materialId = materialId;
     }
 
     set(
@@ -141,7 +142,8 @@ class Triangle {
         color1 = 0,
         color2 = 0,
 
-        material = 0,
+        textureId = 0,
+        materialId = 0,
     ) {
         this.verticesU[0] = u0;
         this.verticesV[0] = v0;
@@ -163,7 +165,8 @@ class Triangle {
         this.colors[1] = color1;
         this.colors[2] = color2;
 
-        this.materialId = material;
+        this.textureId = textureId;
+        this.materialId = materialId;
     }
 }
 
@@ -495,8 +498,8 @@ class ExpoRender {
     };
 
     fetchTexture(id: number) {
-        if (this.textures[id]) {
-            return this.textures[id];
+        if (this.textures[id - 1]) {
+            return this.textures[id - 1];
         }
 
         return ExpoRender.missingTexture;
@@ -518,30 +521,21 @@ class ExpoRender {
     }
 
     static generateMissingTexture() {
-        let data = new ImageData(64, 64);
-        let c0 = 0xFF00FFFF;
-        let c1 = 0x000000FF;
-        let index = 0;
-        for (let r = 0; r < 8; r++) {
-            for (let rp = 0; rp < 8; rp++) {
-                for (let b = 0; b < 4; b++) {
-                    for (let p = 0; p < 8; p++) {
-                        data.data[index++] = (c0 >> 24) & 0xFF;
-                        data.data[index++] = (c0 >> 16) & 0xFF;
-                        data.data[index++] = (c0 >> 8) & 0xFF;
-                        data.data[index++] = (c0 >> 0) & 0xFF;
-                    }
-                    for (let p = 0; p < 8; p++) {
-                        data.data[index++] = (c1 >> 24) & 0xFF;
-                        data.data[index++] = (c1 >> 16) & 0xFF;
-                        data.data[index++] = (c1 >> 8) & 0xFF;
-                        data.data[index++] = (c1 >> 0) & 0xFF;
-                    }
-                }
+        let data = new ImageData(8, 8);
+        let colors = [0xFF00FFFF, 0x000000FF];
+        let colorIndex = 0;
+        let dataIndex = 0;
+        for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+                data.data[dataIndex++] = (colors[colorIndex] >> 24) & 0xFF;
+                data.data[dataIndex++] = (colors[colorIndex] >> 16) & 0xFF;
+                data.data[dataIndex++] = (colors[colorIndex] >> 8) & 0xFF;
+                data.data[dataIndex++] = (colors[colorIndex] >> 0) & 0xFF;
+                colorIndex++;
+                colorIndex %= 2;
             }
-            let tmp = c1;
-            c1 = c0;
-            c0 = tmp;
+            colorIndex++;
+            colorIndex %= 2;
         }
 
         return data;
@@ -741,7 +735,7 @@ class ExpoRender {
                     if (!this.renderZ) {
                         for (; x < endX; x++) {
                             if (recipZ >= activeZBuffer[zBase]) {
-                                if (tri.textured) {
+                                if (tri.textureId != 0) {
                                     let correctZ = 1 / recipZ;
                                     // extend when out of bounds
                                     let correctU = bounds(0, 1, recipU * correctZ);
@@ -749,23 +743,6 @@ class ExpoRender {
 
                                     let pixelU = (correctU * texture.width) | 0;
                                     let pixelV = (correctV * texture.height) | 0;
-
-                                    // Checkerboard pattern
-                                    // let addU = 0;
-                                    // if ((correctV % 0.2) >= 0.1) {
-                                    //     addU = 0.1;
-                                    // }
-
-                                    // if (((correctU + addU) % 0.2) >= 0.1) {
-                                    //     fc0 = (fc0 * 0.5) | 0;
-                                    //     fc1 = (fc1 * 0.5) | 0;
-                                    //     fc2 = (fc2 * 0.5) | 0;
-                                    // }
-
-                                    // Color interpolation
-                                    // this.buffer.data[base + 0] = fc0; /* R */;
-                                    // this.buffer.data[base + 1] = fc1; /* G */;
-                                    // this.buffer.data[base + 2] = fc2; /* B */;
 
                                     let texelBase = (pixelV * texture.width + pixelU) * 4;
                                     let texelR = (texture.data[texelBase + 0] * tri.colorFactor) | 0;
@@ -1073,49 +1050,68 @@ class ExpoRender {
 
         this.renderTris = new Array(4);
 
-        // this.tris[0].verticesX[2] = 127 + 1;
-        // this.tris[0].verticesY[2] = 27 - 1;
-        // this.tris[0].verticesX[1] = 195 + 1;
-        // this.tris[0].verticesY[1] = 163 - 1;
-        // this.tris[0].verticesX[0] = 59 + 1;
-        // this.tris[0].verticesY[0] = 163 - 1;
-
-        // this.tris[0].verticesU[2] = this.tris[0].verticesX[2];
-        // this.tris[0].verticesV[2] = this.tris[0].verticesY[2];
-        // this.tris[0].verticesU[1] = this.tris[0].verticesX[1];
-        // this.tris[0].verticesV[1] = this.tris[0].verticesY[1];
-        // this.tris[0].verticesU[0] = this.tris[0].verticesX[0];
-        // this.tris[0].verticesV[0] = this.tris[0].verticesY[0];
-
-        this.tris[0].set(
-            0, 0, 0, 0, 0,
-            63, 0, 0, 1, 0,
-            0, 63, 0, 0, 1,
-
-            0xFF0000FF,
-            0x00FF00FF,
-            0x0000FFFF
+        this.addCube(
+            0, 0, 0, 64, 0xFFFFFFFF, 1
         );
-        this.tris[0].textured = true;
-        this.tris[1].set(
-            63, 63, 0, 1, 1,
-            63, 0, 0, 1, 0,
-            0, 63, 0, 0, 1,
 
-            0xFF0000FF,
-            0x00FF00FF,
-            0x0000FFFF
-        );
-        this.tris[1].textured = true;
-
-        this.loadTextureFromUrl("cubetexture.png");
+        this.loadTextureFromUrl("screenie.png");
 
         // Actual application setup 
-
         for (let i = 0; i < this.zBufferAlwaysBlank.length; i++) {
             this.zBufferAlwaysBlank[i] = Z_BUFFER_CLEAR_VAL;
         }
     }
+
+    addCube(x: number, y: number, z: number, size: number, color: number, textureId: number) {
+        let hSize = size / 2; // half size
+        let mul = 1;
+        let cMul = 1; // right triangle corner 
+        this.normalShading = false;
+        // for (let a = 0; a < 3; a++) {
+            for (let f = 0; f < 2; f++) {
+                for (let t = 0; t < 2; t++) {
+                    this.tris.push(new Triangle(
+                        x + hSize * cMul, y + hSize * cMul, z + hSize * mul, t, t,
+                        x - hSize, y + hSize, z + hSize * mul, 0, 1,
+                        x + hSize, y - hSize, z + hSize * mul, 1, 0,
+
+                        color,
+                        color,
+                        color,
+
+                        textureId
+                    ));
+                    this.tris.push(new Triangle(
+                        z + hSize * mul, x + hSize * cMul, y + hSize * cMul, t, t,
+                        z + hSize * mul, x - hSize, y + hSize, 0, 1,
+                        z + hSize * mul, x + hSize, y - hSize, 1, 0,
+
+                        color,
+                        color,
+                        color,
+
+                        textureId
+                    ));
+                    this.tris.push(new Triangle(
+                        x + hSize * cMul, z + hSize * mul,y + hSize * cMul, t, t,
+                        x - hSize,z + hSize * mul, y + hSize, 0, 1,
+                        x + hSize,z + hSize * mul, y - hSize, 1, 0,
+
+                        color,
+                        color,
+                        color,
+
+                        textureId
+                    ));
+
+
+                    cMul *= -1;
+                }
+
+                mul *= -1;
+            }
+        }
+    // }
 
     clear() {
         let pos = 0;
@@ -1136,53 +1132,6 @@ class ExpoRender {
     frame(time: DOMHighResTimeStamp) {
         let deltaTime = time - lastTime;
         lastTime = time;
-        // let ratio = (Math.sin(time / 1000) + 1) / 2;
-        // let x = lerp(0, 400, ratio);
-
-        // clockwise winding order
-        // tris[0].set(
-        //     96, 64, 0,
-        //     160, 128, 0,
-        //     96, 128, 0,
-
-        //     0xFF7F7FFF,
-        //     0xFF7F7FFF,
-        //     0xFF7F7FFF,
-        // );
-
-        // tris[1].set(
-        //     96, 64, 0,
-        //     160, 64, 0,
-        //     160, 128, 0,
-
-        //     0xFF7F7FFF,
-        //     0xFF7F7FFF,
-        //     0xFF7F7FFF,
-        // );
-
-        // tris[2].set(
-        //     32 + 96, 64, 20,
-        //     32 + 160, 128, 20,
-        //     32 + 96, 128, 20,
-
-        //     0x7FFF7FFF,
-        //     0x7FFF7FFF,
-        //     0x7FFF7FFF,
-        // );
-
-        // tris[3].set(
-        //     32 + 96, 64, 20,
-        //     32 + 160, 64, 20,
-        //     32 + 160, 128, 20,
-
-        //     0x7FFF7FFF,
-        //     0x7FFF7FFF,
-        //     0x7FFF7FFF,
-        // );
-
-        // 79.57741211: 1 rotation per second
-        // let speedMul = 0.5;
-        // // let rad = time / (Math.PI * 2 * 79.57741211 / speedMul);
 
         sinY = Math.sin(toRadians(this.cameraRotateY));
         cosY = Math.cos(toRadians(this.cameraRotateY));
@@ -1212,30 +1161,11 @@ class ExpoRender {
         if (this.lookDown) this.cameraRotateX += moveBy;
         if (this.lookUp) this.cameraRotateX -= moveBy;
 
-        // cameraRotateY += moveBy / 40;
-
-        // let triangle0Z = Math.sin(time / (100000 * 10)) * 50;
         this.tris[0].verticesZ[0] = this.triangle0Z;
         this.tris[0].verticesZ[1] = this.triangle0Z;
         this.tris[0].verticesZ[2] = this.triangle0Z;
         this.tris[0].materialId = 12345;
         this.tris[1].materialId = 12345;
-
-        // let rad = toRadians(parseInt((document.getElementById("slider")! as HTMLInputElement).value)) / (Math.PI * 2);
-        // let sin = Math.sin(rad);
-        // let cos = Math.cos(rad);
-        // rotate(tris[0], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
-        // rotate(tris[1], WIDTH / 2, HEIGHT / 2, sin * 2, cos * 2);
-        // rotate(tris[2], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
-        // rotate(tris[3], (WIDTH / 2) + 64, HEIGHT / 2, sin, cos);
-        // rotate(tris[2], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
-        // rotate(tris[3], (WIDTH / 2) + 16, HEIGHT / 2, sin / 2, cos / 2);
-
-        // `[${matrixTruncater(cos)}, ${matrixTruncater(-sin)}]
-        // [${matrixTruncater(sin)}, ${matrixTruncater(cos)}]
-        // debug(`
-        // Pixels filled: ${pixelsFilled}`
-        // );
 
         this.clear();
 
@@ -1319,7 +1249,7 @@ class ExpoRender {
 
                 renderTri.colors[j] = preTri.colors[j];
             }
-            renderTri.textured = preTri.textured;
+            renderTri.textureId = preTri.textureId;
             renderTri.materialId = preTri.materialId;
 
             if (this.rotate) {
@@ -1617,7 +1547,7 @@ function parseObjFile(objFile: string, xFlip: boolean, yFlip: boolean, zFlip: bo
                 tri.colors[1] = color;
                 tri.colors[2] = color;
                 tri.materialId = materialId;
-                tri.textured = false;
+                tri.textureId = 0;
                 triangleArr.push(tri);
                 for (let j = 0; j < 3; j++) {
                     tri.verticesX[j] = positionArr[refs[j]].x * (xFlip ? -1 : 1);
